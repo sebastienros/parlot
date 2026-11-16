@@ -130,6 +130,29 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion) => new ThenTry<T, U>(this, conversion);
 
     /// <summary>
+    /// Builds a parser like <see cref="ThenTry{U}(TryConvert{T, U})"/> which records why a value is rejected with the
+    /// failure: <paramref name="reason"/> is <see cref="Cursor.FurthestReason"/> when the parse fails there.
+    /// </summary>
+    /// <param name="conversion">
+    /// Receives the <see cref="ParseContext"/>, the start and end offsets of the value and the value, and returns whether it
+    /// is converted, the converted value in its <see langword="out"/> parameter.
+    /// </param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    /// <remarks>
+    /// A conversion which rejects values for different reasons records its own instead, with
+    /// <see cref="Cursor.RecordFailure(int, object)"/> before it returns <see langword="false"/>.
+    /// </remarks>
+    public Parser<U> ThenTry<U>(TryConvert<T, U> conversion, object reason) => new ThenTry<T, U>(this, conversion, reason);
+
+    /// <summary>
+    /// Builds a parser like <see cref="ThenTry{U}(Func{T, ValueTuple{bool, U}})"/> which records why a value is rejected with
+    /// the failure: <paramref name="reason"/> is <see cref="Cursor.FurthestReason"/> when the parse fails there.
+    /// </summary>
+    /// <param name="conversion">Returns whether the value is converted, and the converted value.</param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion, object reason) => new ThenTry<T, U>(this, conversion, reason);
+
+    /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
     /// </summary>
     public Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);
@@ -190,6 +213,19 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> When(Func<ParseContext, T, bool> predicate) => new When<T>(this, predicate);
 
     /// <summary>
+    /// Builds a parser that verifies the previous parser result matches a predicate, and records why it doesn't with the
+    /// failure: <paramref name="reason"/> is <see cref="Cursor.FurthestReason"/> when the parse fails there.
+    /// </summary>
+    /// <param name="predicate">Whether the value is accepted.</param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    /// <remarks>
+    /// Unlike <c>ElseError</c>, the rejection doesn't stop the parse: an alternative can still match, and the reason is only
+    /// reported when the parse fails at the start of the rejected value, with
+    /// <c>TryParse(..., out ParseError error)</c> in <see cref="ParseError.Reason"/>.
+    /// </remarks>
+    public Parser<T> When(Func<ParseContext, T, bool> predicate, object reason) => new When<T>(this, predicate, reason);
+
+    /// <summary>
     /// Builds a parser that ensures the specified parser matches at the current position without consuming input (positive lookahead).
     /// </summary>
     public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead.Then<object>(value: null!));
@@ -198,6 +234,15 @@ public abstract partial class Parser<T> : IParser<T>
     /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input (negative lookahead).
     /// </summary>
     public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(value: null!));
+
+    /// <summary>
+    /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input
+    /// (negative lookahead), and records why with the failure: <paramref name="reason"/> is
+    /// <see cref="Cursor.FurthestReason"/> when the parse fails where the lookahead matched.
+    /// </summary>
+    /// <param name="lookahead">The parser which must not match.</param>
+    /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
+    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead, object reason) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(value: null!), reason);
 
     /// <summary>
     /// Builds a parser that selects a target parser based on the previous result.

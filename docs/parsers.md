@@ -86,6 +86,47 @@ furthest failure as the one of the `string`.
 The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved back
 from on that path only: it doesn't change the time of a successful parse.
 
+### Why it failed there
+
+A parser which rejects what it read can say why, with a reason it records with the failure: `When(predicate, reason)`,
+`ThenTry(conversion, reason)`, `Not(parser, reason)` and `WhenNotFollowedBy(lookahead, reason)`. Unlike `ElseError`,
+which stops the parse at the first rejection, the parse goes on: another alternative can still match, and the reason is
+only reported when the parse failed where it was recorded. `TryParse(..., out ParseError error)` then returns an error
+whose `Reason` is the reason, `Position` the furthest failure, and `Message` the reason when it is a `string`, its text
+otherwise. `Cursor.FurthestReason` is the same reason, `null` when there is none:
+
+```csharp
+var number = Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), "An identifier can't follow a number");
+var word = Terms.Identifier().When(static (_, value) => !value.Span.SequenceEqual("in".AsSpan()), "'in' is reserved");
+var statement = number.Then(static value => value.ToString()).Or(word.Then(static value => value.ToString()))
+    .AndSkip(Terms.Char(';'));
+
+statement.TryParse("3in;", out _, out var error);  // An identifier can't follow a number, at 1
+statement.TryParse("in;", out _, out error);       // 'in' is reserved, at 0
+statement.TryParse("word", out _, out error);      // null: the ';' expected at 4 has no reason
+```
+
+- The reason is a constant, like a message or an `enum` value boxed once in a static field, so that a rejection allocates
+  nothing. A source-generated parser takes a `string`, an `enum` value or an integer.
+- A conversion which rejects values for different reasons records its own with
+  `context.Scanner.Cursor.RecordFailure(offset, reason)` before it returns `false`, at the start of the value (the
+  `start` argument of a `ThenTry` callback) or of the part of it which is wrong, like the digit `8` of an octal number.
+  `ThenTry` records the failure of a rejected value where it starts, after the white space its parser skips: a parser
+  which reads that white space, like a `Capture`, passes a `start` before it, where a reason would be hidden.
+  `ParseError.Reason` holds the reason, `TryParse(text, out value)` doesn't build the error.
+- A further failure without a reason hides it: the reason is reported only while it is at `FurthestOffset`.
+- The first reason recorded at an offset is kept: the alternatives which are tried first are the more specific ones.
+- A lookahead (`Not`, `WhenFollowedBy`, `Peek`, `WhenNotFollowedBy`) forgets a reason its parser recorded further than
+  the failure recorded before it, like it forgets that failure. The cursor keeps a single reason, so that nothing is
+  saved when a lookahead starts: a reason its parser recorded where that failure already was is kept, and a reason
+  recorded before the lookahead is forgotten when its parser records one further. Rejections with a reason inside a
+  lookahead are best avoided: give the reason to the lookahead, like `Not(parser, reason)`, instead.
+- An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`.
+
+Source-generated parsers return the reason in their failure tuple, see
+[Failure position](source-generation.md#failure-position). Recording it costs a compare and two stores, on the failure
+path of the parsers which have a reason only.
+
 ## Collecting diagnostics without stopping
 
 By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`
