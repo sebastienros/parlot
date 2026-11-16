@@ -219,12 +219,21 @@ public class Cursor
     {
         var lines = _lines;
 
-        // Forward from the furthest position requested, the common case, without a '\r' a '\n' can still follow
-        if (lines is not null && offset > lines.FrontierOffset && offset - _base <= _textLength && (_flags & CrLfFlag) == 0)
+        // The common cases, without a '\r' a '\n' can still follow: forward from the furthest position requested, or just
+        // behind it, like the start of a token whose end was requested, which costs as little as counting a few chars
+        if (lines is not null && (_flags & CrLfFlag) == 0 && offset - _base <= _textLength)
         {
-            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
-            lines.SetFrontier(position);
-            return position;
+            if (offset > lines.FrontierOffset)
+            {
+                var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
+                lines.SetFrontier(position);
+                return position;
+            }
+
+            if (offset > lines.Counted && lines.FrontierOffset - offset <= JustBehind && offset >= _originOffset)
+            {
+                return CountBackward(lines, offset);
+            }
         }
 
         if (offset < _originOffset || offset - _base > _textLength)
@@ -309,6 +318,9 @@ public class Cursor
 
         return FindPosition(lines, offset);
     }
+
+    // The distance behind the furthest position up to which a position is always counted from it
+    private const int JustBehind = 64;
 
     // How many times the text not recorded is counted for the positions behind the furthest one before its lines are
     // recorded: recording a line costs about as much as counting a few dozen chars
