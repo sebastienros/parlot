@@ -398,7 +398,8 @@ starts with when it matches, not only their first chars. Ordinal `Text` and `Key
 parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `WithState`, `Switch`,
 `SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Peek`, `AsToken`, `Between`, `OneOrMany`,
 `Separated`, the sequences, `OperatorIndex` and `Deferred` forward the prefixes of the
-parser that reads first, and a `OneOf` tells those of its alternatives. A sequence which
+parser that reads first, a `Separated` with a last element those of both elements, and a
+`OneOf` tells those of its alternatives. A sequence which
 starts with `Not` tells the prefixes of its parser and of the one after it, when both tell
 them, and one which starts with `Peek` those of its parser. A parser that
 doesn't implement it, including any custom `ISeekable`, tells its expected chars as

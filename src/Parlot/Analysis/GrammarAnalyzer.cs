@@ -501,7 +501,21 @@ internal sealed class GrammarAnalysis
 
             if (first is ISeekable { CanSeek: true })
             {
-                return $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";
+                // A parser which can start with several ones, like a list with a last element, can't seek because of another
+                // one. A list with a last element also can't seek when only one of its elements skips white space. The other
+                // lists start with their separator or nothing because they have no hints, not because of their separator.
+                if (parser is not ISeparatedList { Last: null } && UnseekableStart(parser) is { } other)
+                {
+                    first = other;
+                }
+                else if (parser is ISeparatedList { Last: ISeekable { CanSeek: true } last } && last.SkipWhitespace != ((ISeekable)first).SkipWhitespace)
+                {
+                    return $"{Describe(parser)} can start with {Describe(first)} or {Describe(last)}, and only one of them skips white space";
+                }
+                else
+                {
+                    return $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";
+                }
             }
 
             parser = first;
@@ -835,7 +849,8 @@ internal sealed class GrammarAnalysis
     {
         var chain = new List<object> { parser };
 
-        while (parser is not IChoiceParser && ParlotTypeName(parser) is { } name && s_firstMustSucceed.Contains(name) &&
+        // A list can succeed without its first parser, with a last element, a leading separator or no minimum
+        while (parser is not IChoiceParser and not ISeparatedList { FirstMustSucceed: false } && ParlotTypeName(parser) is { } name && s_firstMustSucceed.Contains(name) &&
             FirstInvoked(parser) is { } first && !ContainsReference(chain, first))
         {
             chain.Add(first);
@@ -898,6 +913,23 @@ internal sealed class GrammarAnalysis
     }
 
     private object? FirstInvoked(object parser) => _starts.TryGetValue(parser, out var node) && node.Edges.Count > 0 ? node.Edges[0].Parser : null;
+
+    // The first parser that parser can invoke before reading anything and which can't seek
+    private object? UnseekableStart(object parser)
+    {
+        if (_starts.TryGetValue(parser, out var node))
+        {
+            foreach (var edge in node.Edges)
+            {
+                if (edge.Parser is not ISeekable { CanSeek: true })
+                {
+                    return edge.Parser;
+                }
+            }
+        }
+
+        return null;
+    }
 
     private bool IsNullable(object parser) => _starts.TryGetValue(parser, out var node) && node.Nullable;
 
@@ -969,6 +1001,8 @@ internal sealed class GrammarAnalysis
                 return Describe(first, depth + 1) + ".AndSkip(...)";
             case "SequenceSkipAnd" when first is not null:
                 return Describe(first, depth + 1) + ".SkipAnd(...)";
+            case "Separated" when first is not null && parser is ISeparatedList { Last: { } last }:
+                return $"Separated({Describe(first, depth + 1)}, last: {Describe(last, depth + 1)})";
             case "Deferred":
                 return $"Deferred<{StripArity(parser.GetType().GetGenericArguments()[0].Name)}>";
             case not null when first is not null && parser is not IChoiceParser:
