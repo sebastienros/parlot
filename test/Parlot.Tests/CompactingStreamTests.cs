@@ -143,6 +143,32 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ChoicesWithNoNewLineBeforeAlternativesOfOtherNewLinesKeepTheBufferBounded()
+    {
+        // The NoNewLineBefore alternatives look for other new lines: the choice invokes them before the white space, which it
+        // doesn't keep while the block is read
+        var id = Terms.Identifier();
+        var block = Terms.Char('{').SkipAnd(ZeroOrMany(Terms.Identifier())).AndSkip(Terms.Char('}')).Then(static x => "{" + x.Count + "}");
+        var parser = Terms.Identifier().And(OneOf(
+            NoNewLineBefore(Terms.Text("=>"), "\r").SkipAnd(id).Then(static x => "=>" + x),
+            NoNewLineBefore(Terms.Text("->")).SkipAnd(id).Then(static x => "->" + x),
+            block)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+
+        var body = string.Join(" ", Enumerable.Range(0, 2_000).Select(static i => "b" + i));
+        var text = "d" + new string(' ', 100) + "\n{ " + body + " }";
+
+        Assert.Equal("d{2000}", parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal("d{2000}", parser.Parse(new ChunkedReader(text, 3), options));
+        Assert.InRange(peak(), 1, 256);
+
+        Assert.Equal("d=>e", parser.Parse(new ChunkedReader("d \n => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \r => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \n -> e", 1)));
+    }
+
+    [Fact]
     public void GuardedRepetitionsKeepTheBufferBounded()
     {
         // The loop skips the white space to test whether a statement can start after it, then moves back before it: the

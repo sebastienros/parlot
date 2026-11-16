@@ -313,6 +313,58 @@ public class NewLineTests
 
         Assert.Equal(expected, parser.Parse(input));
         Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+
+        // The white space is skipped once, before the choice of Lookup() and its NoNewLineBefore are invoked
+        if (input.Contains('f'))
+        {
+            var entered = new System.Collections.Generic.List<int>();
+            var context = new ParseContext(new Scanner(input))
+            {
+                OnEnterParser = (p, c) =>
+                {
+                    if (p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal))
+                    {
+                        entered.Add(c.Scanner.Cursor.Offset);
+                    }
+                },
+            };
+
+            var result = new ParseResult<string>();
+            parser.Parse(context, ref result);
+            Assert.Equal([input.IndexOf('f')], entered);
+        }
+    }
+
+    [Theory]
+    [InlineData("a \r y", "y")]
+    [InlineData("a \n y", null)]
+    [InlineData("a \r x y", "y")]
+    [InlineData("a \n c", null)]
+    [InlineData("a \n e", "e")]
+    public void ANoNewLineBeforeAfterOneMatchingNothingShouldSeeNoWhiteSpace(string input, string? expected)
+    {
+        // The first NoNewLineBefore can match nothing, after the white space: the second one is invoked there, where it sees
+        // none, as when the alternatives skip the white space themselves
+        var parser = Literals.Char('a').SkipAnd(OneOf(
+            NoNewLineBefore(ZeroOrOne(Terms.Text("x")), "\n").And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2),
+            NoNewLineBefore(Terms.Text("c")),
+            Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Fact]
+    public void AChoiceReachedAgainWhileItsWhiteSpaceIsResolvedShouldParse()
+    {
+        // The analysis of the alternatives reaches the choice again through the Lookup()
+        var expression = Deferred<string>();
+        expression.Parser = OneOf(
+            NoNewLineBefore(Terms.Text("x")),
+            expression.And(Terms.Char('+')).Then(static x => x.Item1 + "+").Lookup(skipWhiteSpace: true, 'x'));
+
+        Assert.Equal("x", expression.Parse("x"));
+        Assert.Equal("x", expression.Parse(" x"));
     }
 
     [Theory]

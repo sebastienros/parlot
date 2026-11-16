@@ -861,7 +861,7 @@ public class ParseContext
         return Scanner.Cursor.Offset == _skippedEnd ? FindNewLineInSkippedWhiteSpace(newLines) : SkipWhiteSpaceAndFindNewLine(newLines);
     }
 
-    // The white space is still buffered when the input is streamed and the choice didn't search it: it pinned its start
+    // The choice only leaves the white space to search with a string: it searches a compacting buffer itself
     private bool FindNewLineInSkippedWhiteSpace(string? newLines)
     {
         var cursor = Scanner.Cursor;

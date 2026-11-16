@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using Parlot.Rewriting;
@@ -70,6 +71,18 @@ internal interface IReadsLeadingWhiteSpace
     /// Gets the new lines it looks for, <see langword="null"/> for the ones of <see cref="ParseContext.WhiteSpaceSet"/>.
     /// </summary>
     string? NewLines { get; }
+}
+
+/// <summary>
+/// A choice which skips the white space once for its alternatives and records it for the <see cref="IReadsLeadingWhiteSpace"/>
+/// parsers they invoke first, see <see cref="ParseContext.EnterSkippedWhiteSpace(int)"/>.
+/// </summary>
+internal interface IRecordsSkippedWhiteSpace
+{
+    /// <summary>
+    /// Gets whether it records the white space it skips.
+    /// </summary>
+    bool RecordsSkippedWhiteSpace { get; }
 }
 
 /// <summary>
@@ -165,6 +178,27 @@ internal static class LeadingWhiteSpace
             Reads = reads;
         }
     }
+
+    // The choices whose white space this thread resolves, see Resolving(): one reached again through a cycle keeps the
+    // white space for its alternatives meanwhile
+    [ThreadStatic]
+    private static HashSet<object>? t_resolving;
+
+    /// <summary>
+    /// Records that <paramref name="choice"/> resolves how it skips the white space, until <see cref="EndResolving"/>.
+    /// </summary>
+    public static void BeginResolving(object choice) => (t_resolving ??= new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance)).Add(choice);
+
+    /// <summary>
+    /// Records that <paramref name="choice"/> resolved how it skips the white space.
+    /// </summary>
+    public static void EndResolving(object choice) => t_resolving!.Remove(choice);
+
+    /// <summary>
+    /// Gets whether this thread resolves how <paramref name="choice"/> skips the white space, which the analysis of its
+    /// alternatives reached again.
+    /// </summary>
+    public static bool Resolving(object choice) => t_resolving?.Contains(choice) == true;
 
     // Whether an IReadsLeadingWhiteSpace parser was ever built: the grammars which have none aren't explored
     private static volatile bool s_anyReader;
@@ -334,7 +368,12 @@ internal static class LeadingWhiteSpace
             if (parser is IReadsLeadingWhiteSpace reader)
             {
                 readers.Add(reader.NewLines);
-                return ReachesReader(reader.Parser, starts) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+
+                // A parser which can match nothing leaves the cursor where the white space ends, where the reader which can
+                // follow it would search the white space again rather than skip none
+                return ReachesReader(reader.Parser, starts) || (starts.TryGetValue(reader.Parser, out var readerNode) && readerNode.Nullable)
+                    ? LeadingWhiteSpaceUse.Kept
+                    : LeadingWhiteSpaceUse.Skipped;
             }
 
             if (parser is ISkipsWhiteSpace skips)
@@ -348,7 +387,11 @@ internal static class LeadingWhiteSpace
             return LeadingWhiteSpaceUse.Skipped;
         }
 
-        if (parser is ILeadingWhiteSpace { LeadingWhiteSpace: not LeadingWhiteSpaceUse.None and var declared })
+        // A choice which records the white space it skips is invoked where that white space ends: it skips none, and keeps
+        // the one recorded before, which its alternatives are told like the ones of the choice which recorded it
+        var recorder = readers != null && parser is IRecordsSkippedWhiteSpace { RecordsSkippedWhiteSpace: true };
+
+        if (!recorder && parser is ILeadingWhiteSpace { LeadingWhiteSpace: not LeadingWhiteSpaceUse.None and var declared })
         {
             return declared;
         }

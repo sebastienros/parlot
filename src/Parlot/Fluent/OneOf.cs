@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IRecordsSkippedWhiteSpace
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -85,9 +85,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
     private Parser<T>[]? _otherParsersBeforeWhiteSpace;
 
-    // Whether a HoistedWithNewLine choice reading a compacting buffer searches the white space it skips for the parsers of its
-    // alternatives, which look for the same _newLines: it doesn't keep the white space buffered for them then
-    private bool _searchesNewLines;
+    // Whether the parsers of the alternatives of a HoistedWithNewLine choice which look for a new line look for the same
+    // _newLines. A choice reading a compacting buffer searches the white space it skips for them then, rather than keeping it
+    // buffered while they are tried; it invokes them before the white space otherwise, like a BeforeWhiteSpace one.
+    private bool _sameNewLines;
     private string? _newLines;
 
     public OneOf(Parser<T>[] parsers)
@@ -468,12 +469,28 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         {
             EnsureResolved();
 
+            // Reached again through a cycle while it's resolved: it keeps the white space for its alternatives meanwhile
+            if (LeadingWhiteSpace.Resolving(this))
+            {
+                return LeadingWhiteSpaceUse.Kept;
+            }
+
             return ReadWhiteSpace() switch
             {
                 Hoisted => LeadingWhiteSpaceUse.Skipped,
                 BeforeWhiteSpace or HoistedWithNewLine => LeadingWhiteSpaceUse.Kept,
                 _ => LeadingWhiteSpaceUse.None,
             };
+        }
+    }
+
+    bool IRecordsSkippedWhiteSpace.RecordsSkippedWhiteSpace
+    {
+        get
+        {
+            EnsureResolved();
+
+            return !LeadingWhiteSpace.Resolving(this) && ReadWhiteSpace() == HoistedWithNewLine;
         }
     }
 
@@ -494,26 +511,38 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
 
         var newLines = new LeadingWhiteSpace.ReaderNewLines();
+        bool canSkip;
 
-        if (CanSkipBeforeReaders(newLines))
+        // The analysis can reach this choice again through a cycle, which keeps the white space meanwhile
+        LeadingWhiteSpace.BeginResolving(this);
+
+        try
         {
-            // A compacting buffer can release the white space once it's searched, when the parsers look for the same new lines
-            _searchesNewLines = !newLines.Several;
-            _newLines = newLines.NewLines;
-
-            Volatile.Write(ref _whiteSpace, HoistedWithNewLine);
-            return HoistedWithNewLine;
+            canSkip = CanSkipBeforeReaders(newLines);
+        }
+        finally
+        {
+            LeadingWhiteSpace.EndResolving(this);
         }
 
-        // The table is written before the mode, which the parsers read first. Two alternatives are tried in order: reading the
-        // char after the white space costs about what the one which doesn't match does.
-        if (_originalParsers.Length > MaxAlternativesInOrder)
+        // The tables are written before the mode, which the parsers read first. Two alternatives are tried in order: reading
+        // the char after the white space costs about what the one which doesn't match does.
+        if (canSkip)
+        {
+            // A compacting buffer searches the white space for the parsers when they look for the same new lines, and can
+            // release it then. They are invoked before it otherwise, like when they can't be told the white space.
+            _sameNewLines = !newLines.Several;
+            _newLines = newLines.NewLines;
+        }
+
+        if ((!canSkip || !_sameNewLines) && _originalParsers.Length > MaxAlternativesInOrder)
         {
             (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
         }
 
-        Volatile.Write(ref _whiteSpace, BeforeWhiteSpace);
-        return BeforeWhiteSpace;
+        var whiteSpace = canSkip ? HoistedWithNewLine : BeforeWhiteSpace;
+        Volatile.Write(ref _whiteSpace, whiteSpace);
+        return whiteSpace;
     }
 
     // Whether the parsers the choice invokes, after the white space it skips once, match what the alternatives match before
@@ -959,6 +988,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         withoutValue &= simple && _withoutValue;
 
+        if (whiteSpace == HoistedWithNewLine && context.IsCompacting && !_sameNewLines)
+        {
+            // The white space would stay buffered while the alternatives are read
+            whiteSpace = BeforeWhiteSpace;
+        }
+
         if (simple && whiteSpace == BeforeWhiteSpace && Volatile.Read(ref _mapBeforeWhiteSpace) == null)
         {
             return ParseInOrder(context, ref result, withoutValue);
@@ -975,10 +1010,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         var start = 0;
         var failure = -1;
 
-        // The white space recorded before this choice, and the pin of its start, when the choice records the one it skips
+        // The white space recorded before this choice, when the choice records the one it skips
         var hoisted = whiteSpace is Hoisted or HoistedWithNewLine;
         var skipped = 0L;
-        var skippedPin = -1;
 
         // The lookup map releases the text as soon as a single alternative remains. The window may not hold the text
         // after the current char, so the alternatives aren't selected again by their prefixes.
@@ -997,16 +1031,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             {
                 start = cursor.Offset;
 
-                if (whiteSpace == HoistedWithNewLine && context.IsCompacting && _searchesNewLines)
+                if (whiteSpace == HoistedWithNewLine && context.IsCompacting)
                 {
-                    // The alternatives look for the same new lines: the white space is searched for them once, which reads
-                    // it as a token
+                    // The white space is searched for the alternatives once, which reads it as a token, and isn't kept
                     skipped = context.EnterSkippedWhiteSpace(start, context.SkipWhiteSpaceAndFindNewLine(_newLines));
                 }
                 else if (whiteSpace == HoistedWithNewLine)
                 {
-                    // The alternatives search the white space for a new line: it stays buffered while they are tried
-                    skippedPin = context.Pin();
+                    // The alternatives search the white space for a new line when they are invoked: a string when the
+                    // diagnostics are collected
                     context.SkipWhiteSpace();
                     skipped = context.EnterSkippedWhiteSpace(start);
                 }
@@ -1040,7 +1073,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     if (whiteSpace == HoistedWithNewLine)
                     {
                         context.ExitSkippedWhiteSpace(skipped);
-                        context.Unpin(skippedPin);
                     }
 
                     context.ExitParser(this);
@@ -1062,7 +1094,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         if (whiteSpace == HoistedWithNewLine)
         {
             context.ExitSkippedWhiteSpace(skipped);
-            context.Unpin(skippedPin);
         }
 
         if (hoisted)
@@ -1155,6 +1186,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // An alternative looks for a new line in the white space, like NoNewLineBefore: the alternatives are selected with
         // the char after it, and invoked before it, see ParseCompacting()
         var whiteSpace = ReadWhiteSpace();
+
+        // A compacting buffer would keep the white space while the alternatives are read, see ParseCompacting()
+        if (whiteSpace == HoistedWithNewLine && context.IsCompacting && !_sameNewLines)
+        {
+            whiteSpace = BeforeWhiteSpace;
+        }
+
         var beforeWhiteSpace = whiteSpace == BeforeWhiteSpace;
         var map = beforeWhiteSpace ? _mapBeforeWhiteSpace : _map;
         var otherParsers = beforeWhiteSpace ? _otherParsersBeforeWhiteSpace : _otherParsers;
@@ -1164,7 +1202,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // The white space recorded before the choice, when it records the one it skips for the parsers of its alternatives
         // which look for a new line in it, see ParseWithNewLine()
         string? skippedName = null;
-        string? skippedPinName = null;
 
         if (SkipWhitespace && !beforeWhiteSpace)
         {
@@ -1175,22 +1212,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             {
                 skippedName = $"skipped{context.NextNumber()}";
 
-                if (context.IsCompacting && _searchesNewLines)
+                if (context.IsCompacting)
                 {
-                    // The alternatives look for the same new lines: the white space is searched for them once, which reads it
-                    // as a token
+                    // The white space is searched for the alternatives once, which reads it as a token, and isn't kept
                     var newLines = _newLines is null ? "null" : LiteralHelper.StringToLiteral(_newLines);
                     result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName}, {ctx}.SkipWhiteSpaceAndFindNewLine({newLines}));");
                 }
                 else
                 {
-                    // The alternatives search the white space for a new line: it stays buffered while they are tried
-                    if (context.IsCompacting)
-                    {
-                        skippedPinName = $"skippedPin{context.NextNumber()}";
-                        result.Body.Add($"var {skippedPinName} = {ctx}.Pin();");
-                    }
-
+                    // The alternatives search the white space for a new line when they are invoked
                     result.Body.Add($"{ctx}.SkipWhiteSpace();");
                     result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName});");
                 }
@@ -1373,11 +1403,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         if (skippedName is not null)
         {
             result.Body.Add($"{ctx}.ExitSkippedWhiteSpace({skippedName});");
-
-            if (skippedPinName is not null)
-            {
-                result.Body.Add($"{ctx}.Unpin({skippedPinName});");
-            }
         }
 
         if (startName is not null)

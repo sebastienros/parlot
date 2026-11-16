@@ -170,6 +170,8 @@ public class StreamingTests
         // NoNewLineBefore alternatives with their own new lines, told the white space the choice skips, and ones which can't be
         // told: a NoNewLineBefore after SkipWhiteSpace, which sees none, and one holding another one
         ["newline-choice-sets"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b"), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof()),
+        // A NoNewLineBefore which can match nothing, before another one
+        ["newline-choice-empty"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(ZeroOrOne(Terms.Text("x")), "\n").And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof()),
         ["newline-choice-skipped"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")))).Eof()),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
@@ -526,6 +528,7 @@ public class StreamingTests
         ];
         Add("newline-choice-sets", newLineChoiceSets);
         Add("newline-choice-skipped", newLineChoiceSets);
+        Add("newline-choice-empty", "a \r y", "a \n y", "a \r x y", "a\r\nx y", "a \n c", "a c", "a \n e", "a" + new string(' ', 140) + "\ry");
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
         Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
         Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");
