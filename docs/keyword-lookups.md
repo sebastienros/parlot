@@ -398,7 +398,8 @@ starts with when it matches, not only their first chars. Ordinal `Text` and `Key
 parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `WithState`, `Switch`,
 `SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Peek`, `AsToken`, `Between`, `OneOrMany`,
 `Separated`, the sequences, `OperatorIndex` and `Deferred` forward the prefixes of the
-parser that reads first, and a `OneOf` tells those of its alternatives. A parser that
+parser that reads first, a `Separated` with a last element those of both elements, and a
+`OneOf` tells those of its alternatives. A parser that
 doesn't implement it, including any custom `ISeekable`, tells its expected chars as
 prefixes of one char. Like the expected chars, a prefix is only a condition for the parser
 to match: the parser still reads its text, so a shorter prefix is always valid. The

@@ -121,6 +121,42 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ListsWithALastElementKeepTheBufferBounded()
+    {
+        // The last element is read where the parser of the values failed, and a separator which no element follows is read
+        // again by the next parser: each list only pins from the end of its last value (#588)
+        var name = Terms.Identifier().Then(static x => x.ToString());
+        var rest = Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x);
+        var list = Separated(Terms.Char(','), name, rest);
+        var parser = ZeroOrMany(Between(Terms.Char('('), list.AndSkip(Terms.Char(',').Optional()), Terms.Char(')'))).Eof();
+        var text = string.Join(" ", Enumerable.Range(0, 10_000).Select(static i => (i % 3) switch
+        {
+            0 => "(a" + i + ", b" + i + ", ...r" + i + ")",
+            1 => "(a" + i + ", b" + i + ",)",
+            _ => "(...r" + i + ")",
+        }));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(10_000, result.Count);
+        Assert.Equal(["a9999", "b9999", "...r9999"], result[9_999]);
+        Assert.Equal(["...r9998"], result[9_998]);
+        Assert.Equal(["a9997", "b9997"], result[9_997]);
+        Assert.InRange(peak(), 1, 64);
+
+        // A single long list
+        var values = string.Join(", ", Enumerable.Range(0, 10_000).Select(static i => "a" + i)) + ", ...rest";
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var all = list.Eof().Parse(new ChunkedReader(values, 3), options)!;
+
+        Assert.Equal(10_001, all.Count);
+        Assert.Equal("...rest", all[10_000]);
+        Assert.InRange(peak(), 1, 64);
+    }
+
+    [Fact]
     public void GuardedRepetitionsKeepTheBufferBounded()
     {
         // The loop skips the white space to test whether a statement can start after it, then moves back before it: the

@@ -69,6 +69,9 @@ public class LoopAnalysisTests
     [InlineData("separated")]
     [InlineData("separatedEmptyFirst")]
     [InlineData("separatorAfterEmptyFirst")]
+    [InlineData("separatedLastParser")]
+    [InlineData("separatedLast")]
+    [InlineData("separatedLastEmpty")]
     [InlineData("between")]
     [InlineData("unary")]
     [InlineData("leftAssociative")]
@@ -116,6 +119,10 @@ public class LoopAnalysisTests
             // A first value that doesn't read is a value, the separator then reads where the list started
             "separatedEmptyFirst" => Separated(Literals.Char(','), Always("s")).SkipAnd(a),
             "separatorAfterEmptyFirst" => Separated(a.AndSkip(z), Always("s")).Then(static x => string.Concat(x)),
+            // Both elements of a list with a last element can be invoked where it starts, and it can be empty (#588)
+            "separatedLastParser" => Separated(Literals.Char(','), a.AndSkip(z), Literals.Text("r"), min: 1).Then(static x => string.Concat(x)),
+            "separatedLast" => Separated(Literals.Char(','), Literals.Text("y"), a.AndSkip(z), min: 1).Then(static x => string.Concat(x)),
+            "separatedLastEmpty" => Separated(Literals.Char(','), Literals.Text("y"), Literals.Text("r")).SkipAnd(a),
             "between" => Between(Literals.Char('(').Optional(), a, z),
             "unary" => a.AndSkip(z).Unary((Literals.Char('-'), static x => "-" + x)),
             "leftAssociative" => a.AndSkip(z).LeftAssociative((Literals.Char('+'), static (x, y) => x + y)),

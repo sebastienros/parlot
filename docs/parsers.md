@@ -1493,6 +1493,9 @@ Parser<IReadOnlyList<T>> Separated<U, T>(
 Parser<IReadOnlyList<T>> Separated<U, T>(
     Parser<U> separator, Parser<T> parser, int min, int max,
     bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator, Parser<T> parser, Parser<T> last,
+    int min = 0, bool allowTrailingSeparator = false, bool removeEmptyEntries = false)
 ```
 
 Usage:
@@ -1552,6 +1555,31 @@ parser.Parse("");      // [""]
 With `removeEmptyEntries`, `allowLeadingSeparator` or `allowTrailingSeparator`, a value
 that matches without consuming input is an empty entry instead, wherever it is: a leading
 separator is then skipped without recording a value for the omitted part.
+
+#### A last element
+
+A list can end with an element of another kind, which no separator follows, like the rest element of JavaScript's
+parameters `(a, b, ...rest)` and patterns `[a, , ...rest]`, or Python's `*args, **kwargs`. Pass it as `last`:
+
+```c#
+var name = Terms.Identifier().Then(static x => x.ToString());
+var rest = Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x);
+var parameters = Separated(Terms.Char(','), name, rest);
+
+parameters.Parse("a, b, ...r");  // ["a", "b", "...r"]
+parameters.Parse("...r");        // ["...r"]
+parameters.Parse("");            // []
+parameters.Parse("a, ...r, b");  // ["a", "...r"], the cursor is after "...r"
+```
+
+- `last` is tried where a value would be, where the list starts and after each separator, when `parser` doesn't match.
+  It ends the list: no separator is consumed after it, so that `, b` above is left to the next parser.
+- The list holds the values and the last element, without a copy. `min` counts them both, and its default, zero, accepts
+  an empty list.
+- `allowTrailingSeparator` consumes a separator after the last value of `parser` (`a, b,`), never after `last`.
+- `removeEmptyEntries` skips successive separators, before `last` too (`a, , ...r`). A separator can't lead the list.
+- An element is only found when it reads text: an element that matches without consuming input isn't a value, and
+  `last` is then tried.
 
 ### Between
 
