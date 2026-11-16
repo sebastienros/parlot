@@ -38,6 +38,7 @@ public class ReaderParserTests
         CheckPadded<string>(Grammar.TryParseTextBefore, Grammar.TryParseTextBefore, 'a', "-->", "==>", "b-->", "-=->", "--", "");
         CheckPadded<string>(Grammar.TryParseTextBeforeChar, Grammar.TryParseTextBeforeChar, 'a', ";", "b;", "");
         CheckPadded<string>(Grammar.TryParsePattern, Grammar.TryParsePattern, '1', "", "2", "a");
+        CheckPadded<string>(Grammar.TryParseTemplate, Grammar.TryParseTemplate, ' ', "`a${b}c`", "`a\\${b}`", "`a${`b${c}`}d`", "`a${b", "`a$", "`a\\");
 
         var options = new GrammarOptions { Prefix = ">", Formal = true };
         CheckPadded<string>(
@@ -56,6 +57,8 @@ public class ReaderParserTests
 
         Check<string>(Grammar.TryParseString, Grammar.TryParseString, "'" + new string('a', 3 * BufferSize) + "'");
         Check<string>(Grammar.TryParseString, Grammar.TryParseString, "'" + new string('a', 3 * BufferSize));
+        Check<string>(Grammar.TryParseTemplate, Grammar.TryParseTemplate, "`" + new string('a', 3 * BufferSize) + "${b}" + new string('c', 3 * BufferSize) + "`");
+        Check<string>(Grammar.TryParseTemplate, Grammar.TryParseTemplate, "`" + new string('a', 3 * BufferSize) + "${b}" + new string('c', 3 * BufferSize));
         Check<int>(Grammar.TryParseNumber, Grammar.TryParseNumber, new string('1', 9) + new string(' ', 3 * BufferSize));
 
         // Nesting deep enough to cross the first read overflows the default stack of Debug builds.
