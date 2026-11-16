@@ -151,6 +151,14 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
+    /// Builds a parser that succeeds when the specified parser fails to match, and records why it fails otherwise:
+    /// <paramref name="reason"/> is <see cref="Cursor.FurthestReason"/> when the parse fails where the parser matched.
+    /// </summary>
+    /// <param name="parser">The parser which must not match.</param>
+    /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
+    public static Parser<T> Not<T>(Parser<T> parser, object reason) => new Not<T>(parser, reason);
+
+    /// <summary>
     /// Builds a parser that succeeds with the value of the specified parser when it matches, without consuming any input
     /// (positive lookahead, the PEG <c>&amp;p</c>).
     /// </summary>

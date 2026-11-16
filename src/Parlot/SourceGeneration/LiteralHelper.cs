@@ -1,3 +1,4 @@
+using System;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace Parlot.SourceGeneration;
@@ -19,12 +20,21 @@ public static class LiteralHelper
             return "default";
         }
 
-        // Handle enums
+        // Handle enums. A combination of flags has no name: it is the number, cast.
         if (value.GetType().IsEnum)
         {
             var enumType = value.GetType();
             var typeName = SourceGenerationContext.GetTypeName(enumType);
-            return $"{typeName}.{value}";
+
+            if (Enum.IsDefined(enumType, value))
+            {
+                // A member named like a keyword is escaped
+                var name = value.ToString()!;
+                return SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ? $"{typeName}.@{name}" : $"{typeName}.{name}";
+            }
+
+            var number = Convert.ChangeType(value, Enum.GetUnderlyingType(enumType), System.Globalization.CultureInfo.InvariantCulture);
+            return $"(({typeName})({ToLiteral(number)}))";
         }
 
         return value switch

@@ -134,6 +134,7 @@ public class BenchmarksTests
         Assert.True(benchmark.Negative());
         Assert.True(benchmark.WhenAccepted());
         Assert.False(benchmark.WhenRejected());
+        Assert.False(benchmark.WhenReasonRejected());
         Assert.False(benchmark.NotFollowedRejected());
         Assert.False(benchmark.NegativeRejected());
         Assert.True(benchmark.Peeked());
@@ -144,6 +145,8 @@ public class BenchmarksTests
         Assert.True(benchmark.RuntimeNegative());
         Assert.True(benchmark.RuntimeWhenAccepted());
         Assert.False(benchmark.RuntimeWhenRejected());
+        Assert.False(benchmark.RuntimeWhenReasonRejected());
+        Assert.False(benchmark.RuntimeWhenReasonError());
         Assert.False(benchmark.RuntimeNotFollowedRejected());
         Assert.False(benchmark.RuntimeNegativeRejected());
         Assert.True(benchmark.RuntimePeeked());

@@ -159,6 +159,13 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   Span code moves back with it too, to before the white space it skipped when what follows wasn't found. Leave
   `ResetPositionNotInlined` as it is: the parsers which reset the cursor the most inline it, and recording only the
   moves back there, two instructions, cost `ExprBench.ParlotFluentBig` 3% with dynamic PGO, nothing without it.
+- A parser which rejects what it read can record why with the failure: the public `Cursor.RecordFailure(offset, reason)`
+  keeps the first reason recorded at the furthest offset, and `FurthestReason` reports it only while its offset is
+  `FurthestOffset`, so that `ResetPositionNotInlined` doesn't touch it; `RestoreRecordedFailure` forgets a reason further
+  than what it restores, the only cost of reasons outside their failure paths (a compare). `When`, `ThenTry`, `Not` and `WhenNotFollowedBy` take one, and pass it on their failure path
+  only (`ParseContext.RecordRejected` takes it too); emitters pass it with `SourceGenerationContext.ReasonArgument`, a
+  literal or a static field, never a new box per failure. A token read again (`RetryToken`) restores the reason exactly. Entry points return it in an `object` element of the
+  failure tuple; `FailureReasonParityTests` compares it with the runtime `ParseError.Reason` on random inputs.
 - Where the cursor moves back from text which matched (an alternative of `Longest`, the white space before a valued
   operator), read `Cursor.RecordedFailure` before `ResetPosition` and call `RestoreRecordedFailure` after: a match isn't
   a failure where it ends. In span code the cursor only moves to skip white space: code emitted after the position was
