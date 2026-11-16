@@ -27,6 +27,7 @@ public abstract partial class Parser<T>
     public T? Parse(ParseContext context)
     {
         context.Scanner.Cursor.ResetFurthestOffset();
+        context.ForgetSkippedWhiteSpace();
 
         var localResult = new ParseResult<T>();
 
@@ -65,6 +66,7 @@ public abstract partial class Parser<T>
         error = null;
 
         context.Scanner.Cursor.ResetFurthestOffset();
+        context.ForgetSkippedWhiteSpace();
 
         try
         {

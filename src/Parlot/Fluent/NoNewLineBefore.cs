@@ -56,6 +56,8 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
 
     object IReadsLeadingWhiteSpace.Parser => Parser;
 
+    string? IReadsLeadingWhiteSpace.NewLines => _newLines;
+
     // The hints of the parser it invokes after the white space, read when they are asked for since it can be a Deferred set
     // later. It skips the white space itself, whether its parser does or not.
     private ForwardedHints? _hints;

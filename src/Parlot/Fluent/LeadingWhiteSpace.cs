@@ -56,7 +56,7 @@ internal interface ILeadingWhiteSpace
 /// A choice can also skip the white space once and invoke its alternatives after it, when the readers they invoke first
 /// only look for new lines in it: it records the white space it skipped with
 /// <see cref="ParseContext.EnterSkippedWhiteSpace(int)"/>, and a reader invoked where it ends searches it, see
-/// <see cref="LeadingWhiteSpace.CanSkipBeforeReaders(object)"/>.
+/// <see cref="LeadingWhiteSpace.CanSkipBeforeReaders"/>.
 /// </para>
 /// </remarks>
 internal interface IReadsLeadingWhiteSpace
@@ -65,6 +65,11 @@ internal interface IReadsLeadingWhiteSpace
     /// Gets the parser it invokes after the white space.
     /// </summary>
     object Parser { get; }
+
+    /// <summary>
+    /// Gets the new lines it looks for, <see langword="null"/> for the ones of <see cref="ParseContext.WhiteSpaceSet"/>.
+    /// </summary>
+    string? NewLines { get; }
 }
 
 /// <summary>
@@ -227,42 +232,114 @@ internal static class LeadingWhiteSpace
     public static bool CanSkipBefore(object parser) => Of(parser) == LeadingWhiteSpaceUse.Skipped;
 
     /// <summary>
-    /// Gets whether <paramref name="parser"/> starts by skipping white space, and matches the same text, with the same
-    /// value, when that white space was skipped before it is invoked and recorded with
+    /// The new lines the <see cref="IReadsLeadingWhiteSpace"/> parsers found by <see cref="CanSkipBeforeReaders"/> look for.
+    /// </summary>
+    internal sealed class ReaderNewLines
+    {
+        // Whether a reader was found, and whether they don't all look for the same new lines
+        public bool Found;
+        public bool Several;
+
+        // The new lines of the first one
+        public string? NewLines;
+
+        public void Add(string? newLines)
+        {
+            if (!Found)
+            {
+                Found = true;
+                NewLines = newLines;
+            }
+            else if (newLines != NewLines)
+            {
+                Several = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether each of <paramref name="parsers"/> starts by skipping white space, and matches the same text, with the
+    /// same value, when that white space was skipped before it is invoked and recorded with
     /// <see cref="ParseContext.EnterSkippedWhiteSpace(int)"/>: the <see cref="IReadsLeadingWhiteSpace"/> parsers it invokes
-    /// first, where it ends, look for their new lines in it.
+    /// first, where it ends, look for their new lines in it. Their new lines are added to <paramref name="newLines"/>.
     /// </summary>
     /// <remarks>
     /// A reader is only invoked where the white space ends when nothing skipped white space before it: a parser which skips
     /// it first, like <see cref="SkipWhiteSpace{T}"/>, is invoked there too, and its reader would find the new lines it
     /// doesn't see. So does a reader whose parser invokes another one. Such parsers keep the white space.
     /// </remarks>
-    public static bool CanSkipBeforeReaders(object parser)
+    public static bool CanSkipBeforeReaders(IReadOnlyList<object> parsers, ReaderNewLines newLines)
     {
-        if (parser is not ISeekable { SkipWhitespace: true })
+        if (parsers.Count == 0)
         {
-            return false;
+            return true;
         }
 
-        var starts = LoopAnalysis.ExploreStarts([parser]);
+        // The parsers they invoke first, explored once for all of them
+        var starts = LoopAnalysis.ExploreStarts(parsers);
 
-        return Of(parser, starts, new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance), readers: true) == LeadingWhiteSpaceUse.Skipped;
+        foreach (var parser in parsers)
+        {
+            if (parser is not ISeekable { SkipWhitespace: true }
+                || Of(parser, starts, new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance), newLines) != LeadingWhiteSpaceUse.Skipped)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    // readers: whether the IReadsLeadingWhiteSpace parsers are told the white space skipped before them, see
-    // CanSkipBeforeReaders()
-    private static LeadingWhiteSpaceUse Of(object parser, Dictionary<object, LoopAnalysis.Node> starts, HashSet<object> visited, bool readers = false)
+    // Whether a reader can be invoked first by the parser, which the starts hold
+    private static bool ReachesReader(object parser, Dictionary<object, LoopAnalysis.Node> starts)
     {
-        if (readers)
+        if (!starts.TryGetValue(parser, out var first))
+        {
+            return parser is IReadsLeadingWhiteSpace;
+        }
+
+        var pending = new Stack<LoopAnalysis.Node>();
+        var visited = new HashSet<LoopAnalysis.Node>();
+        pending.Push(first);
+
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+
+            if (!visited.Add(node))
+            {
+                continue;
+            }
+
+            if (node.Parser is IReadsLeadingWhiteSpace)
+            {
+                return true;
+            }
+
+            foreach (var edge in node.Edges)
+            {
+                pending.Push(edge);
+            }
+        }
+
+        return false;
+    }
+
+    // readers: the new lines of the IReadsLeadingWhiteSpace parsers when they are told the white space skipped before them,
+    // see CanSkipBeforeReaders(), null otherwise
+    private static LeadingWhiteSpaceUse Of(object parser, Dictionary<object, LoopAnalysis.Node> starts, HashSet<object> visited, ReaderNewLines? readers = null)
+    {
+        if (readers != null)
         {
             if (parser is IReadsLeadingWhiteSpace reader)
             {
-                return ReadsLeadingWhiteSpace(reader.Parser) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+                readers.Add(reader.NewLines);
+                return ReachesReader(reader.Parser, starts) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
             }
 
             if (parser is ISkipsWhiteSpace skips)
             {
-                return ReadsLeadingWhiteSpace(skips.Parser) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+                return ReachesReader(skips.Parser, starts) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
             }
         }
 

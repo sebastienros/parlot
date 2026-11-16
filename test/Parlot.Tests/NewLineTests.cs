@@ -301,6 +301,36 @@ public class NewLineTests
     }
 
     [Theory]
+    [InlineData("a \n foo", null)]
+    [InlineData("a foo", "foo")]
+    [InlineData("a \n x", "x")]
+    [InlineData("a \n y", "y")]
+    public void AChoiceShouldTellTheWhiteSpaceItSkippedThroughALookupOfAChoice(string input, string? expected)
+    {
+        // The table invokes the choice of Lookup() itself, which skips no white space after the one the outer choice skipped
+        var inner = OneOf(Terms.Text("x"), NoNewLineBefore(Terms.Identifier().Then(static x => x.ToString()))).Lookup(skipWhiteSpace: true, 'f', 'x');
+        var parser = Literals.Char('a').SkipAnd(OneOf(Terms.Text("y"), inner)).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
+    [InlineData("x \n ac", null)]
+    [InlineData("x ac", "ac")]
+    [InlineData("x \n ab", "ab")]
+    public void AChoiceShouldTellTheWhiteSpaceItSkippedAfterAnAlternativeWithAnotherWhiteSpaceParser(string input, string? expected)
+    {
+        // The first alternative reads "a" and fails with its own white space parser, which doesn't hide the white space the
+        // choice skipped from the second one
+        var first = Terms.Text("a").And(Terms.Text("b").WithWhiteSpaceParser(Literals.WhiteSpace())).Then(static x => x.Item1 + x.Item2);
+        var parser = Literals.Char('x').SkipAnd(OneOf(first, NoNewLineBefore(Terms.Identifier().Then(static x => x.ToString())))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
     [InlineData("a \nb", "b")]
     [InlineData("a \rb", null)]
     [InlineData("a \nc", null)]

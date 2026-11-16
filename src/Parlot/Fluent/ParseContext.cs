@@ -334,6 +334,9 @@ public class ParseContext
         // The failure recorded when the token being read started, see RetryToken
         public int TokenRecordedFailure;
 
+        // The white space a choice recorded when the token being read started, see RetryToken
+        public long TokenSkippedWhiteSpace;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -410,7 +413,6 @@ public class ParseContext
 
             // The white spaces skipped by the previous parser are not the ones this one skips
             _cacheOffset = -1;
-            _skippedEnd = -1;
         }
 
         SetFlag(ReentrantWhiteSpaceFlag, reentrant);
@@ -456,7 +458,6 @@ public class ParseContext
 
                 // The white spaces skipped by the previous parser are not the ones this one skips
                 _cacheOffset = -1;
-                _skippedEnd = -1;
             }
 
 #if !PARLOT_STANDALONE
@@ -572,9 +573,13 @@ public class ParseContext
     private int _cacheEndOffset;
 
     // The white space a choice skipped before it invoked its alternatives, from _skippedStart to _skippedEnd, where the
-    // NoNewLineBefore parsers they invoke first look for their new lines: see EnterSkippedWhiteSpace(). -1 when there is none.
+    // NoNewLineBefore parsers they invoke first look for their new lines: see EnterSkippedWhiteSpace(). _skippedEnd is -1 when
+    // there is none. When the choice searched it already, _skippedStart is NoNewLineSkipped or NewLineSkipped.
     private int _skippedStart;
     private int _skippedEnd = -1;
+
+    private const int NoNewLineSkipped = -1;
+    private const int NewLineSkipped = -2;
 
     /// <summary>
     /// Records the white space a choice skipped, from <paramref name="start"/> to the cursor, before it invokes alternatives
@@ -582,24 +587,52 @@ public class ParseContext
     /// which <see cref="ExitSkippedWhiteSpace(long)"/> restores once they are tried.
     /// </summary>
     /// <remarks>
-    /// Such a parser invoked where the white space ends, before anything else skipped white space, searches it rather than
-    /// skipping the white space after it, which isn't there, see <see cref="SkipWhiteSpaceAndFindNewLineBefore(string)"/>.
-    /// The choice only invokes alternatives for which this is the white space they would skip, see
-    /// <c>LeadingWhiteSpace.CanSkipBeforeReaders</c>.
+    /// Such a parser invoked where the white space ends searches it rather than skipping the white space after it, which
+    /// isn't there, see <see cref="SkipWhiteSpaceAndFindNewLineBefore(string)"/>. The choice only invokes alternatives for
+    /// which this is the white space they would skip, see <c>LeadingWhiteSpace.CanSkipBeforeReaders</c>. When the choice
+    /// skipped none, the white space recorded before is kept: there is none before the cursor either way.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal long EnterSkippedWhiteSpace(int start)
     {
-        var previous = ((long)_skippedStart << 32) | (uint)_skippedEnd;
+        var previous = PackSkippedWhiteSpace();
+        var end = Scanner.Cursor.Offset;
 
-        _skippedStart = start;
-        _skippedEnd = Scanner.Cursor.Offset;
+        if (end != start)
+        {
+            _skippedStart = start;
+            _skippedEnd = end;
+        }
 
         return previous;
     }
 
     /// <summary>
-    /// Forgets the white space a choice recorded, when a parser it invoked threw and the text is parsed again.
+    /// <see cref="EnterSkippedWhiteSpace(int)"/>, for white space the choice searched already, with the new lines of all the
+    /// parsers which look for them: whether it contains one is <paramref name="newLine"/>. A compacting buffer can release the
+    /// white space then.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal long EnterSkippedWhiteSpace(int start, bool newLine)
+    {
+        var previous = PackSkippedWhiteSpace();
+        var end = Scanner.Cursor.Offset;
+
+        if (end != start)
+        {
+            _skippedStart = newLine ? NewLineSkipped : NoNewLineSkipped;
+            _skippedEnd = end;
+        }
+
+        return previous;
+    }
+
+    // The recorded white space as one value, unchecked since generated consumers can compile with checked arithmetic
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private long PackSkippedWhiteSpace() => unchecked(((long)_skippedStart << 32) | (uint)_skippedEnd);
+
+    /// <summary>
+    /// Forgets the white space a choice recorded, when the text is parsed again after a parser it invoked threw.
     /// </summary>
     internal void ForgetSkippedWhiteSpace() => _skippedEnd = -1;
 
@@ -609,8 +642,8 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ExitSkippedWhiteSpace(long previous)
     {
-        _skippedStart = (int)(previous >> 32);
-        _skippedEnd = (int)previous;
+        _skippedStart = unchecked((int)(previous >> 32));
+        _skippedEnd = unchecked((int)previous);
     }
 
     // Where the white space at an offset ends when it is the last one that was skipped, as before a single token, and -1
@@ -803,9 +836,7 @@ public class ParseContext
 
         if (end > start)
         {
-            var span = cursor.GetSpan(start, end - start);
-
-            if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
+            if (ContainsNewLine(cursor.GetSpan(start, end - start), newLines))
             {
                 return true;
             }
@@ -830,24 +861,27 @@ public class ParseContext
         return Scanner.Cursor.Offset == _skippedEnd ? FindNewLineInSkippedWhiteSpace(newLines) : SkipWhiteSpaceAndFindNewLine(newLines);
     }
 
-    // The white space is still buffered when the input is streamed: the choice pinned its start
+    // The white space is still buffered when the input is streamed and the choice didn't search it: it pinned its start
     private bool FindNewLineInSkippedWhiteSpace(string? newLines)
     {
         var cursor = Scanner.Cursor;
-        var span = cursor.GetSpan(_skippedStart, _skippedEnd - _skippedStart);
-
-        if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
-        {
-            return true;
-        }
+        var found = _skippedStart >= 0
+            ? ContainsNewLine(cursor.GetSpan(_skippedStart, _skippedEnd - _skippedStart), newLines)
+            : _skippedStart == NewLineSkipped;
 
         // More text could hold one, like for the white space SkipWhiteSpaceAndFindNewLine() skips
-        if (cursor.Eof)
+        if (!found && cursor.Eof)
         {
             cursor.MarkHitEnd();
         }
 
-        return false;
+        return found;
+    }
+
+    // Whether the white space contains one of the new lines, or one of WhiteSpaceSet's when they are null
+    private bool ContainsNewLine(ReadOnlySpan<char> whiteSpace, string? newLines)
+    {
+        return (newLines is null ? Character.IndexOfNewLine(whiteSpace, WhiteSpaceMask) : whiteSpace.IndexOfAny(newLines.AsSpan())) >= 0;
     }
 
 #if !PARLOT_STRING_ONLY
@@ -1015,6 +1049,7 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
         _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
+        _coldState.TokenSkippedWhiteSpace = PackSkippedWhiteSpace();
 
         return cursor.Offset;
     }
@@ -1036,12 +1071,9 @@ public class ParseContext
         Refill(start);
         cursor.ResetHitEnd();
 
-        // The white space a choice of the token recorded, when one threw, isn't skipped anymore. A choice which invoked the
-        // token records the white space before it.
-        if (_skippedEnd > start)
-        {
-            _skippedEnd = -1;
-        }
+        // A choice of the token which threw recorded white space which isn't skipped anymore: the one recorded when the token
+        // started is restored
+        ExitSkippedWhiteSpace(_coldState.TokenSkippedWhiteSpace);
 
         return true;
     }

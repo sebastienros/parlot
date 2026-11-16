@@ -85,6 +85,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
     private Parser<T>[]? _otherParsersBeforeWhiteSpace;
 
+    // Whether a HoistedWithNewLine choice reading a compacting buffer searches the white space it skips for the parsers of its
+    // alternatives, which look for the same _newLines: it doesn't keep the white space buffered for them then
+    private bool _searchesNewLines;
+    private string? _newLines;
+
     public OneOf(Parser<T>[] parsers)
     {
         _originalParsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
@@ -488,8 +493,14 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             return Hoisted;
         }
 
-        if (CanSkipBeforeReaders(_originalParsers, _map != null))
+        var newLines = new LeadingWhiteSpace.ReaderNewLines();
+
+        if (CanSkipBeforeReaders(newLines))
         {
+            // A compacting buffer can release the white space once it's searched, when the parsers look for the same new lines
+            _searchesNewLines = !newLines.Several;
+            _newLines = newLines.NewLines;
+
             Volatile.Write(ref _whiteSpace, HoistedWithNewLine);
             return HoistedWithNewLine;
         }
@@ -507,31 +518,58 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
     // Whether the parsers the choice invokes, after the white space it skips once, match what the alternatives match before
     // it, when the parsers which look for a new line in it are told the white space, see LeadingWhiteSpace.CanSkipBeforeReaders().
-    // flattened: whether the lookup table holds the alternatives of the nested choices and the parsers of SkipWhiteSpace
-    // rather than these, see Build().
-    private static bool CanSkipBeforeReaders(Parser<T>[] parsers, bool flattened)
+    // The new lines they look for are added to newLines.
+    private bool CanSkipBeforeReaders(LeadingWhiteSpace.ReaderNewLines newLines)
     {
-        foreach (var parser in parsers)
+        var parsers = new List<object>();
+
+        return CollectInvoked(_originalParsers, flattened: _map != null, parsers) && LeadingWhiteSpace.CanSkipBeforeReaders(parsers, newLines);
+
+        // The parsers the choice invokes for these alternatives, which are told the white space. flattened: whether the lookup
+        // table holds the alternatives of the nested choices and the parsers of SkipWhiteSpace and Lookup() rather than these,
+        // see Build(). False when one would find the new lines in white space it doesn't see.
+        static bool CollectInvoked(Parser<T>[] alternatives, bool flattened, List<object> parsers)
         {
-            var canSkip = parser switch
+            foreach (var parser in alternatives)
             {
-                // Its parser is invoked after the white space, where it skips none: it mustn't find the new lines in the
-                // white space the choice skipped
-                SkipWhiteSpace<T> skip => !LeadingWhiteSpace.ReadsLeadingWhiteSpace(skip.Parser),
+                switch (parser)
+                {
+                    // Its parser is invoked after the white space, where it skips none: it mustn't find the new lines in the
+                    // white space the choice skipped
+                    case SkipWhiteSpace<T> skip:
+                        if (LeadingWhiteSpace.ReadsLeadingWhiteSpace(skip.Parser))
+                        {
+                            return false;
+                        }
 
-                // The parsers of Lookup() are replaced by the ones they wrap, and the nested choices by their alternatives
-                Seekable<T> seekable when flattened => CanSkipBeforeReaders([seekable.Parser], flattened),
-                OneOf<T> { _map: not null } oneOf when flattened => CanSkipBeforeReaders(oneOf._originalParsers, flattened: true),
-                _ => LeadingWhiteSpace.CanSkipBeforeReaders(parser),
-            };
+                        break;
 
-            if (!canSkip)
-            {
-                return false;
+                    // The nested choices are replaced by their alternatives
+                    case OneOf<T> { _map: not null } oneOf when flattened:
+                        if (!CollectInvoked(oneOf._originalParsers, flattened: true, parsers))
+                        {
+                            return false;
+                        }
+
+                        break;
+
+                    // The parsers of Lookup() are replaced by the ones they wrap, which are invoked themselves
+                    case Seekable<T> seekable when flattened:
+                        if (!CollectInvoked([seekable.Parser], flattened: false, parsers))
+                        {
+                            return false;
+                        }
+
+                        break;
+
+                    default:
+                        parsers.Add(parser);
+                        break;
+                }
             }
-        }
 
-        return true;
+            return true;
+        }
     }
 
     // The lookup table of a choice which invokes its alternatives before the white space: the alternatives themselves, which
@@ -959,7 +997,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             {
                 start = cursor.Offset;
 
-                if (whiteSpace == HoistedWithNewLine)
+                if (whiteSpace == HoistedWithNewLine && context.IsCompacting && _searchesNewLines)
+                {
+                    // The alternatives look for the same new lines: the white space is searched for them once, which reads
+                    // it as a token
+                    skipped = context.EnterSkippedWhiteSpace(start, context.SkipWhiteSpaceAndFindNewLine(_newLines));
+                }
+                else if (whiteSpace == HoistedWithNewLine)
                 {
                     // The alternatives search the white space for a new line: it stays buffered while they are tried
                     skippedPin = context.Pin();
@@ -1129,19 +1173,27 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
             if (whiteSpace == HoistedWithNewLine)
             {
-                // The alternatives search the white space for a new line: it stays buffered while they are tried
-                var pinName = context.IsCompacting ? $"skippedPin{context.NextNumber()}" : null;
-
-                if (pinName != null)
-                {
-                    result.Body.Add($"var {pinName} = {ctx}.Pin();");
-                }
-
                 skippedName = $"skipped{context.NextNumber()}";
-                result.Body.Add($"{ctx}.SkipWhiteSpace();");
-                result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName});");
 
-                skippedPinName = pinName;
+                if (context.IsCompacting && _searchesNewLines)
+                {
+                    // The alternatives look for the same new lines: the white space is searched for them once, which reads it
+                    // as a token
+                    var newLines = _newLines is null ? "null" : LiteralHelper.StringToLiteral(_newLines);
+                    result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName}, {ctx}.SkipWhiteSpaceAndFindNewLine({newLines}));");
+                }
+                else
+                {
+                    // The alternatives search the white space for a new line: it stays buffered while they are tried
+                    if (context.IsCompacting)
+                    {
+                        skippedPinName = $"skippedPin{context.NextNumber()}";
+                        result.Body.Add($"var {skippedPinName} = {ctx}.Pin();");
+                    }
+
+                    result.Body.Add($"{ctx}.SkipWhiteSpace();");
+                    result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName});");
+                }
             }
             else
             {
