@@ -358,6 +358,44 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void SeparatedWithLastIsNotShadowedByItsFirstParser()
+    {
+        // A list with a last element matches its last element where its first parser fails (#588)
+        var item = Terms.Identifier();
+        var rest = Terms.Text("...").SkipAnd(Terms.Identifier());
+
+        Single(GrammarAnalyzer.Analyze(item.Then(static _ => 1).Or(Separated(Terms.Char(','), item).Then(static _ => 2))), GrammarRule.ShadowedAlternative);
+
+        var parser = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, rest, min: 1).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(parser), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, parser.Parse("...r"));
+
+        // A leading separator, or no minimum, also lets a list succeed where its first parser fails
+        var leading = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, allowLeadingSeparator: true).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(leading), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, leading.Parse(", a"));
+
+        var empty = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, min: 0).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(empty), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, empty.Parse(""));
+    }
+
+    [Fact]
+    public void SeparatedWithUnseekableLastIsReported()
+    {
+        // The list can't tell its chars because of its last element, not its first parser
+        var parser = Literals.Char('x').Then(static _ => 1).Or(Separated(Literals.Char(','), Literals.Identifier(), Literals.Pattern(char.IsDigit), min: 1).Then(static _ => 2));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("Separated(Literals.Identifier(...), last: Literals.Pattern(...))", finding.Message);
+        Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
+    }
+
+    [Fact]
     public void SameParserWithAnotherStateIsNotReported()
     {
         // The state can change what the parser matches, so the later alternative isn't known to start with the earlier one
