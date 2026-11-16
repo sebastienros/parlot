@@ -479,6 +479,26 @@ internal sealed class GrammarAnalysis
                 };
             }
 
+            // A sequence which starts with a lookahead has the hints of its parser, and of the parser after it for a Not: the
+            // cause is in one of them, or in the white space only one of them skips. The conditions are those of
+            // SeekableHints.Sequence.
+            if (first is ILookahead lookahead && parser is SourceGeneration.ISequenceSourceable { Parts: [_, var (next, _, _)] })
+            {
+                if (lookahead.Parser is not ISeekable { CanSeek: true })
+                {
+                    parser = lookahead.Parser;
+                    continue;
+                }
+
+                if (!lookahead.MatchesParser && next is not ISeekable { CanSeek: true })
+                {
+                    parser = next;
+                    continue;
+                }
+
+                return $"it starts with {Describe(first)}: its parser {Describe(lookahead.Parser)} and {Describe(next)} don't both skip white space, which a choice skipping it first would change";
+            }
+
             if (first is ISeekable { CanSeek: true })
             {
                 return $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";

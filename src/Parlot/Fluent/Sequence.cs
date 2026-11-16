@@ -22,16 +22,19 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
         _withoutValue2 = _parser2.CanParseWithoutValue;
     }
 
-    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    // The hints of the parser that reads first, the second one when the first is a lookahead, read when they are asked
+    // for since it can be a Deferred set later
     private ForwardedHints? _hints;
 
-    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser1).CanSeek;
+    public bool CanSeek => Hints.CanSeek;
 
-    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser1).ExpectedChars;
+    public char[] ExpectedChars => Hints.ExpectedChars;
 
-    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser1).SkipWhitespace;
+    public bool SkipWhitespace => Hints.SkipWhitespace;
 
-    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser1);
+    private ForwardedHints Hints => ForwardedHints.OfSequence(ref _hints, _parser1, _parser2);
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => ForwardedHints.SequencePrefixes(ref _hints, _parser1, _parser2);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser1) && analysis.Invoke(_parser2);
 

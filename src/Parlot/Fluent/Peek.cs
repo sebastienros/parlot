@@ -13,7 +13,7 @@ namespace Parlot.Fluent;
 /// The result is empty: it starts and ends where the parser was invoked. When the parser fails, this parser fails too, and
 /// the cursor is where it was.
 /// </remarks>
-public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ILookahead
 {
     private readonly Parser<T> _parser;
 
@@ -32,6 +32,10 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _withoutValue = parser.CanParseWithoutValue;
     }
+
+    object ILookahead.Parser => _parser;
+
+    bool ILookahead.MatchesParser => true;
 
     /// <inheritdoc />
     public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
