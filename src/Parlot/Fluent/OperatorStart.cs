@@ -13,36 +13,28 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <remarks>
 /// The chars are the <see cref="ISeekable"/> hints of the choices, the keys of their lookup tables, read once they are
-/// resolved: the char at the cursor for the choices which don't skip the white space, the char after it for the others,
-/// which are invoked when there is white space to skip.
+/// resolved. The choices which skip the white space are invoked when there is some to skip, or when the char at the cursor
+/// is one of theirs.
 /// </remarks>
 internal sealed class OperatorStart
 {
-    // The chars at the cursor, of the choices which don't skip the white space
-    private readonly CharSet _atCursor;
+    // The chars the operators of the choices start with, at the cursor: the ones of the choices which don't skip the white
+    // space, and of the ones which do, when there is none
+    private readonly CharSet _set;
 
-    // The chars after the white space, of the choices which skip it
-    private readonly CharSet _afterWhiteSpace;
+    // The chars of the set, for the generated code, and whether it holds every char above ASCII
+    private readonly char[] _chars;
+    private readonly bool _anyNonAscii;
 
-    // Whether a choice skips the white space, when _afterWhiteSpace has chars
+    // Whether a choice skips the white space
     private readonly bool _skipsWhiteSpace;
 
-    // The chars of the sets, for the generated code, and whether they hold every char above ASCII
-    private readonly char[] _atCursorChars;
-    private readonly bool _atCursorAnyNonAscii;
-    private readonly char[] _afterWhiteSpaceChars;
-    private readonly bool _afterWhiteSpaceAnyNonAscii;
-
-    private OperatorStart(List<char> atCursor, bool atCursorAnyNonAscii, List<char> afterWhiteSpace, bool afterWhiteSpaceAnyNonAscii)
+    private OperatorStart(List<char> chars, bool anyNonAscii, bool skipsWhiteSpace)
     {
-        _atCursorChars = atCursor.ToArray();
-        _atCursorAnyNonAscii = atCursorAnyNonAscii;
-        _afterWhiteSpaceChars = afterWhiteSpace.ToArray();
-        _afterWhiteSpaceAnyNonAscii = afterWhiteSpaceAnyNonAscii;
-
-        _atCursor = new CharSet(_atCursorChars, atCursorAnyNonAscii);
-        _afterWhiteSpace = new CharSet(_afterWhiteSpaceChars, afterWhiteSpaceAnyNonAscii);
-        _skipsWhiteSpace = _afterWhiteSpaceChars.Length > 0 || afterWhiteSpaceAnyNonAscii;
+        _chars = chars.ToArray();
+        _anyNonAscii = anyNonAscii;
+        _set = new CharSet(_chars, anyNonAscii);
+        _skipsWhiteSpace = skipsWhiteSpace;
     }
 
     /// <summary>
@@ -51,10 +43,9 @@ internal sealed class OperatorStart
     /// </summary>
     public static OperatorStart? Create(IReadOnlyList<object> choices)
     {
-        var atCursor = new List<char>();
-        var afterWhiteSpace = new List<char>();
-        var atCursorAnyNonAscii = false;
-        var afterWhiteSpaceAnyNonAscii = false;
+        var chars = new List<char>();
+        var anyNonAscii = false;
+        var skipsWhiteSpace = false;
 
         if (choices.Count == 0)
         {
@@ -73,20 +64,13 @@ internal sealed class OperatorStart
                     return null;
                 }
 
-                var chars = skipWhitespace ? afterWhiteSpace : atCursor;
+                skipsWhiteSpace |= skipWhitespace;
 
                 foreach (var c in expectedChars)
                 {
                     if (c == OneOf<object>.NonAsciiSeekableChar)
                     {
-                        if (skipWhitespace)
-                        {
-                            afterWhiteSpaceAnyNonAscii = true;
-                        }
-                        else
-                        {
-                            atCursorAnyNonAscii = true;
-                        }
+                        anyNonAscii = true;
                     }
                     else if (!chars.Contains(c))
                     {
@@ -96,7 +80,7 @@ internal sealed class OperatorStart
             }
         }
 
-        return new OperatorStart(atCursor, atCursorAnyNonAscii, afterWhiteSpace, afterWhiteSpaceAnyNonAscii);
+        return new OperatorStart(chars, anyNonAscii, skipsWhiteSpace);
     }
 
     /// <summary>
@@ -113,9 +97,9 @@ internal sealed class OperatorStart
     {
         var current = context.Scanner.Cursor.Current;
 
-        return _atCursor.Contains(current)
-            || context.IsCompactingOrCollectingDiagnostics
-            || (_skipsWhiteSpace && (_afterWhiteSpace.Contains(current) || context.MaySkipWhiteSpace(current)));
+        return _set.Contains(current)
+            || (_skipsWhiteSpace && context.MaySkipWhiteSpace(current))
+            || context.IsCompactingOrCollectingDiagnostics;
     }
 
     /// <summary>
@@ -131,15 +115,9 @@ internal sealed class OperatorStart
         Line($"bool {name}()");
         Line("{");
         Line($"    var operatorChar = {cursor}.Current;");
-
-        if (_atCursorChars.Length > 0 || _atCursorAnyNonAscii)
-        {
-            Line($"    if ({Test("operatorChar", _atCursorChars, _atCursorAnyNonAscii)}) return true;");
-        }
-
         Line(_skipsWhiteSpace
-            ? $"    return {Test("operatorChar", _afterWhiteSpaceChars, _afterWhiteSpaceAnyNonAscii)} || {ctx}.MaySkipWhiteSpace(operatorChar);"
-            : "    return false;");
+            ? $"    return {Test("operatorChar", _chars, _anyNonAscii)} || {ctx}.MaySkipWhiteSpace(operatorChar);"
+            : $"    return {Test("operatorChar", _chars, _anyNonAscii)};");
 
         sb.Append('}');
         return sb.ToString();
