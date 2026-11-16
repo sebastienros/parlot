@@ -74,7 +74,12 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
         if (_tracksLineStart)
         {
-            _commentNewLines = comments.Select(c => c.LineTerminators ?? newLines).ToArray();
+            _commentNewLines = new string?[comments.Length];
+
+            for (var i = 0; i < comments.Length; i++)
+            {
+                _commentNewLines[i] = comments[i].LineTerminators ?? newLines;
+            }
         }
 
         ExpectedChars = [];

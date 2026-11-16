@@ -159,7 +159,10 @@ internal sealed class StreamingDriver : IDisposable
                 var consumed = _frameLength + (_frameDelimited ? 1 : 0);
 
                 // The next frame follows the delimiter
-                _charBefore = delimiter;
+                if (_frameDelimited)
+                {
+                    _charBefore = delimiter;
+                }
                 _offset += consumed;
                 _frameStart += consumed;
                 _pendingDelimiter = _frameDelimited;
