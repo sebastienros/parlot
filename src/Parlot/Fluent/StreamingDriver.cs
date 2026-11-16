@@ -158,8 +158,7 @@ internal sealed class StreamingDriver : IDisposable
             if (_frameLength >= 0)
             {
                 // The previous frame is consumed, its end is the position of the delimiter
-                // A '\r' ending the frame doesn't end a line when the delimiter is a '\n'
-                var end = Cursor.GetEndPosition(_frameDelimited ? delimiter : -1);
+                var end = Cursor.Position;
                 _line = end.Line;
                 _column = end.Column;
 
@@ -204,6 +203,13 @@ internal sealed class StreamingDriver : IDisposable
             if (_frameLength > 0)
             {
                 Context = CreateContext(new string(_chars, _frameStart, _frameLength), isFinal: true);
+
+                // A '\r' ending the frame doesn't end a line when the delimiter is a '\n', see Cursor.NewLines
+                if (_frameDelimited && delimiter == '\n')
+                {
+                    Cursor.MarkFollowedByLineFeed();
+                }
+
                 return true;
             }
 

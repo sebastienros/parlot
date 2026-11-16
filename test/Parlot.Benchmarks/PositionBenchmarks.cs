@@ -1,6 +1,7 @@
 using BenchmarkDotNet.Attributes;
 using Parlot.Fluent;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using static Parlot.Fluent.Parsers;
@@ -78,11 +79,23 @@ public class PositionBenchmarks
         var list = Between(Terms.Char('['), Separated(Terms.Char(','), value), Terms.Char(']'));
 
         var node = locations
-            ? list.Then(static (context, start, end, items) => Locate(context, start, end) + items.Sum())
-            : list.Then(static (context, start, end, items) => start + end + items.Sum());
+            ? list.Then(static (context, start, end, items) => Locate(context, start, end) + Sum(items))
+            : list.Then(static (context, start, end, items) => start + end + Sum(items));
 
         value.Parser = leaf.Or(node);
         return value.Eof();
+    }
+
+    private static long Sum(IReadOnlyList<long> items)
+    {
+        var sum = 0L;
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            sum += items[i];
+        }
+
+        return sum;
     }
 
     private static long Locate(ParseContext context, int start, int end)

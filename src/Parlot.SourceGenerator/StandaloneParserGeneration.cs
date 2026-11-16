@@ -51,6 +51,22 @@ public sealed partial class ParserSourceGenerator
             IsReader = isReader;
             CollectsDiagnostics = collectsDiagnostics;
             Failure = failure;
+
+            // The named arguments of the factory's attribute, read once
+            foreach (var argument in factory.Method.GetAttributes()
+                .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
+                .SelectMany(static attribute => attribute.NamedArguments))
+            {
+                switch (argument.Key)
+                {
+                    case "MaxRecursionDepth" when argument.Value.Value is int maxRecursionDepth:
+                        MaxRecursionDepth = maxRecursionDepth;
+                        break;
+                    case "NewLines" when argument.Value.Value is string newLines:
+                        NewLines = newLines;
+                        break;
+                }
+            }
         }
 
         public IMethodSymbol Method { get; }
@@ -76,20 +92,10 @@ public sealed partial class ParserSourceGenerator
             attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
 
         // The recursion limit of the factory's attribute, 0 for none
-        public int MaxRecursionDepth => Factory.Method.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
-            .SelectMany(static attribute => attribute.NamedArguments)
-            .Where(static argument => argument.Key == "MaxRecursionDepth" && argument.Value.Value is int)
-            .Select(static argument => (int)argument.Value.Value!)
-            .FirstOrDefault();
+        public int MaxRecursionDepth { get; }
 
         // The line terminators of the factory's attribute, null for the default "\n"
-        public string? NewLines => Factory.Method.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
-            .SelectMany(static attribute => attribute.NamedArguments)
-            .Where(static argument => argument.Key == "NewLines" && argument.Value.Value is string)
-            .Select(static argument => (string?)argument.Value.Value)
-            .FirstOrDefault();
+        public string? NewLines { get; }
 
         public MethodToGenerate Factory { get; }
         public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - 1 - TrailingOutputs];

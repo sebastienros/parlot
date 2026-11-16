@@ -424,4 +424,29 @@ public class LinePositionTests
 
         Assert.Equal(expected, items);
     }
+
+    [Fact]
+    public async Task ParseManyFrameEndingWithCarriageReturnBeforeALineFeedDelimiter()
+    {
+        // The '\r' ending the first frame and the delimiter end a single line
+        var item = Terms.Identifier().AndSkip(Literals.Char('\r').Optional()).Then(static (context, start, end, name) =>
+        {
+            var position = context.Scanner.Cursor.Position;
+            return (name.ToString(), position.Line, position.Column);
+        });
+
+        var options = new StreamParseOptions
+        {
+            ContextFactory = static (scanner, token) => new ParseContext(scanner, token) { NewLines = "\r\n" },
+        };
+
+        var items = new List<(string, int, int)>();
+
+        await foreach (var parsed in item.ParseManyAsync(new StringReader("ab\r\ncd\r\nef"), '\n', options))
+        {
+            items.Add(parsed);
+        }
+
+        Assert.Equal(new[] { ("ab", 1, 4), ("cd", 2, 4), ("ef", 3, 3) }, items);
+    }
 }
