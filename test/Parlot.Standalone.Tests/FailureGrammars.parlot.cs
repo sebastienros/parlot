@@ -341,3 +341,22 @@ public static partial class FailureGrammars
     public static Parser<string> BuildRejectedSpanWhiteSpace() =>
         Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
 }
+
+public static partial class FailureGrammars
+{
+    // A word which isn't reserved, or a number which isn't followed by a letter
+    [GenerateParser(nameof(Reasoned))]
+    public static Parser<string> BuildReasoned() =>
+        Terms.Identifier().When(static (_, value) => value.ToString() != "from", FailureReason.ReservedWord)
+            .Then(static value => value.ToString())
+            .Or(Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), "A number can't be followed by a letter").Then(static value => "#"))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // An error which stops the parse has no reason
+    [GenerateParser(nameof(ReasonedError))]
+    public static Parser<string> BuildReasonedError() =>
+        Terms.Identifier().When(static (_, value) => value.ToString() != "from", "'from' is reserved")
+            .Then(static value => value.ToString())
+            .Or(Terms.Text("from").SkipAnd(Terms.Char('!').ElseError("Expected '!'")).Then(static _ => "!"))
+            .Eof();
+}

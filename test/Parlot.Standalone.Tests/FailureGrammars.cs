@@ -169,3 +169,17 @@ public static partial class FailureGrammars
     public static partial bool RejectedSpanWhiteSpace(string text, out string value, out int failureOffset);
     public static partial bool RejectedSpanWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }
+
+public enum FailureReason
+{
+    ReservedWord,
+}
+
+public static partial class FailureGrammars
+{
+    public static partial bool Reasoned(string text, out string value);
+    public static partial bool Reasoned(string text, out string value, out (int Offset, object Reason) failure);
+    public static partial bool Reasoned(TextReader reader, out string value, out (int Offset, int Line, int Column, object Reason) failure);
+
+    public static partial bool ReasonedError(string text, out string value, out (int Offset, object Reason, bool NestedTooDeeply) failure);
+}
