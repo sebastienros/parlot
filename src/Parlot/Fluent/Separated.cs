@@ -30,6 +30,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     // Whether the separator can start at the current position, so the list ends without invoking it when it can't
     private readonly SeekGuard _separatorGuard;
 
+    // Whether the last element can start at the current position, so it isn't invoked when it can't
+    private readonly SeekGuard? _lastGuard;
+
     public Separated(Parser<U> separator, Parser<T> parser) : this(separator, parser, 1, 0)
     {
     }
@@ -104,6 +107,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     {
         _last = last ?? throw new ArgumentNullException(nameof(last));
         _lastWithoutValue = last.CanParseWithoutValue;
+        _lastGuard = new SeekGuard(last);
         _hasOptions = true;
     }
 
@@ -448,7 +452,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
             if (!((parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != before))
             {
-                if (!((lastWithoutValue ? _last!.ParseWithoutValue(context, ref parsed) : _last!.Parse(context, ref parsed)) && cursor.Offset != before))
+                if (!(_lastGuard!.CanStart(context) && (lastWithoutValue ? _last!.ParseWithoutValue(context, ref parsed) : _last!.Parse(context, ref parsed)) && cursor.Offset != before))
                 {
                     // No element where the list starts: a separator can't lead it
                     if (count == 0)
@@ -797,6 +801,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var parseContext = context.ParseContextName;
         var parserHelper = GetElementHelper(context, parserSourceable, "Parser");
         var lastHelper = GetElementHelper(context, lastSourceable, "Last");
+
+        // The last element isn't invoked when it can't start at the current position
+        lastHelper = SeekGuard.GetHelper(context, _last, lastHelper, typeof(T));
         var separatorHelper = GetSeparatorHelper(context, separatorSourceable);
 
         var initial = $"initial{context.NextNumber()}";

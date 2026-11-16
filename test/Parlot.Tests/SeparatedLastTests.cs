@@ -207,6 +207,31 @@ public class SeparatedLastTests
     }
 
     [Fact]
+    public void ShouldNotInvokeTheLastElementWhereItCanNotStart()
+    {
+        var entered = 0;
+        var list = List();
+        var context = new ParseContext(new Scanner("a, )"))
+        {
+            OnEnterParser = (parser, _) => entered += ReferenceEquals(parser, Rest) ? 1 : 0,
+        };
+        var result = new ParseResult<IReadOnlyList<string>>();
+
+        Assert.True(list.Parse(context, ref result));
+        Assert.Equal(["a"], result.Value);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+        Assert.Equal(0, entered);
+
+        context = new ParseContext(new Scanner("a, ...r"))
+        {
+            OnEnterParser = (parser, _) => entered += ReferenceEquals(parser, Rest) ? 1 : 0,
+        };
+
+        Assert.True(list.Parse(context, ref result));
+        Assert.Equal(1, entered);
+    }
+
+    [Fact]
     public void ShouldParseWithoutValue()
     {
         var parser = Capture(List(min: 1)).AndSkip(Terms.Char(';'));
