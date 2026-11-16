@@ -287,7 +287,7 @@ public static partial class PrecedenceGrammars
     private static Parser<string> BuildValuedPrefixLimited() =>
         WithRest(Literals.Char('a').Then(static _ => "a").Operators()
             .Unary((Literals.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
-            .LeftAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b))));
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b))));
 
     // A valued prefix level whose first operator can match without reading anything
     [GenerateParser(nameof(TryParseValuedZeroWidthPrefix))]
@@ -297,8 +297,9 @@ public static partial class PrecedenceGrammars
                 (ZeroOrMany(Literals.Char('-')).Then(static x => x.Count), static (string x, int count) => $"-{count}({x})"),
                 (Literals.Char('+').Then(static (_, start, _, _) => start), static (string x, int start) => $"+@{start}({x})")));
 
-    // Prefix levels whose operators skip the white space next to ones whose operators don't, a valued one, and operators after the operands, which the climb tests the first chars of before invoking them. Compared with the runtime, failures
-    // included, in PrecedenceTests.
+    // Prefix levels whose operators skip the white space next to ones whose operators don't, a valued one, and operators
+    // after the operands, which the climb tests the first chars of before invoking them. Compared with the runtime,
+    // failures included, in PrecedenceTests.
     [GenerateParser(nameof(TryParseMixedStart))]
     private static Parser<string> BuildMixedStart()
     {
@@ -319,6 +320,15 @@ public static partial class PrecedenceGrammars
 
         return expression.Eof();
     }
+
+    // A looser prefix level whose operators skip the white space, which isn't tried for the operands of the binary operators
+    [GenerateParser(nameof(TryParseLooserPrefix))]
+    private static Parser<string> BuildLooserPrefix() =>
+        Literals.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Eof();
 
     private static Parser<string> WithRest(Parser<string> parser) =>
         parser.And(Literals.Pattern(static _ => true, minSize: 0)).Then(static x => x.Item1 + " | " + x.Item2.ToString());

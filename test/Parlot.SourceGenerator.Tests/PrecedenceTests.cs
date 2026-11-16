@@ -44,6 +44,8 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseValuedLevels(TextReader reader, out string value);
     public static partial bool TryParseMixedStart(string text, out string value, out int failureOffset);
     public static partial bool TryParseMixedStart(TextReader reader, out string value);
+    public static partial bool TryParseLooserPrefix(string text, out string value, out int failureOffset);
+    public static partial bool TryParseLooserPrefix(TextReader reader, out string value);
 }
 
 internal static class PrecedenceAst
@@ -200,6 +202,24 @@ public class PrecedenceTests
         }
     }
 
+    [Theory]
+    [InlineData("-  ")]
+    [InlineData("a*  b")]
+    [InlineData("-  a")]
+    [InlineData("  a")]
+    [InlineData("typeof  -a*-b")]
+    [InlineData("a*typeof b")]
+    public void Generated_Table_Only_Tests_The_Prefix_Levels_Which_Are_Tried(string input)
+    {
+        var runtime = Literals.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Eof();
+
+        AssertLikeTheRuntime(runtime, PrecedenceGrammars.TryParseLooserPrefix, PrecedenceGrammars.TryParseLooserPrefix, input);
+    }
+
     // The runtime table of PrecedenceGrammars.BuildMixedStart
     internal static Parser<string> RuntimeMixedStart()
     {
@@ -222,12 +242,17 @@ public class PrecedenceTests
     }
 
     // The values, and where the parses fail, are the ones of the runtime, from a string and from a reader
-    private static void AssertMixedStart(Parser<string> runtime, string input)
+    private static void AssertMixedStart(Parser<string> runtime, string input) =>
+        AssertLikeTheRuntime(runtime, PrecedenceGrammars.TryParseMixedStart, PrecedenceGrammars.TryParseMixedStart, input);
+
+    internal delegate bool FailureParser(string text, out string value, out int failureOffset);
+
+    private static void AssertLikeTheRuntime(Parser<string> runtime, FailureParser generated, ReaderParser reader, string input)
     {
         var context = new ParseContext(new Scanner(input));
         var expected = runtime.TryParse(context, out var expectedValue, out _);
 
-        Assert.Equal(expected, PrecedenceGrammars.TryParseMixedStart(input, out var value, out var failure));
+        Assert.Equal(expected, generated(input, out var value, out var failure));
 
         if (expected)
         {
@@ -238,7 +263,7 @@ public class PrecedenceTests
             Assert.Equal(context.Scanner.Cursor.FurthestOffset, failure);
         }
 
-        Assert.Equal(Run(runtime, input), Run(PrecedenceGrammars.TryParseMixedStart, input, 1));
+        Assert.Equal(Run(runtime, input), Run(reader, input, 1));
     }
 
     [Fact]

@@ -209,7 +209,7 @@ local, and the values of the following ones of a chain are kept in a `ListBuilde
 factories which receive the `ParseContext` are called with the context of the parse.
 Like at runtime, the prefix operators and the choices of the operators following an operand are only invoked when the
 char they would start with is one of theirs, which a local function tests with patterns of those chars (not for a
-`TextReader`, whose choices pin the white space they skip).
+`TextReader`, whose choices pin the white space they skip, nor when the entry point collects diagnostics).
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure

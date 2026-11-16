@@ -381,6 +381,7 @@ public class BenchmarksTests
     [InlineData("Simple", "(&& (< (number 3) (name 5)) (>= (number 5) (name 5)))")]
     [InlineData("Prefixes", "(?? (|| (&& (== (+ (* (neg (name 1)) (name 1)) (! (name 1))) (~ (name 1))) (neg (- (name 1) (neg (name 1))))) (! (name 1))) (** (' (name 1)) (number 2)))")]
     [InlineData("Chains", "(&& (== (+ (neg (neg (name 1))) (* (! (! (name 1))) (~ (neg (** (name 1) (number 2)))))) (! (~ (neg (name 1))))) (neg (neg (neg (name 1)))))")]
+    [InlineData("Arguments", "(+ (call 11) (call 4))")]
     public void ExpressionTableGrammar(string input, string expected)
     {
         // The setup checks the generated parser against the runtime one

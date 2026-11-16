@@ -74,6 +74,12 @@ public class OperatorStartTests
         .LeftAssociative((op(Literals.Char('*').Then(static _ => "*")), Binary("*")))
         .LeftAssociative((op(Literals.Char('+').Then(static _ => "+")), Binary("+")));
 
+    // A looser prefix level whose operators skip the white space, which isn't tried for the operands of the binary operators
+    private static Parser<string> LooserPrefix(Func<Parser<string>, Parser<string>> op) => Literals.Identifier().Then(static x => x.ToString()).Operators()
+        .Unary((op(Literals.Char('-').Then(static _ => "-")), Prefix("-")))
+        .LeftAssociative((op(Literals.Char('*').Then(static _ => "*")), Binary("*")))
+        .Unary((op(Terms.Text("typeof")), Prefix("typeof ")));
+
     private static Parser<string> Same(Parser<string> parser) => parser;
 
     private static Parser<string> Hidden(Parser<string> parser) => new NoHints<string>(parser);
@@ -102,6 +108,7 @@ public class OperatorStartTests
         Assert.Equal(Run(Mixed(Hidden), input), Run(Mixed(Same), input));
         Assert.Equal(Run(Skipping(Hidden), input), Run(Skipping(Same), input));
         Assert.Equal(Run(Literal(Hidden), input), Run(Literal(Same), input));
+        Assert.Equal(Run(LooserPrefix(Hidden), input), Run(LooserPrefix(Same), input));
     }
 
     [Fact]
@@ -112,6 +119,7 @@ public class OperatorStartTests
             (Mixed(Hidden), Mixed(Same)),
             (Skipping(Hidden), Skipping(Same)),
             (Literal(Hidden), Literal(Same)),
+            (LooserPrefix(Hidden), LooserPrefix(Same)),
         };
 
         foreach (var input in RandomInputs(580, 3000))
@@ -211,6 +219,21 @@ public class OperatorStartTests
         var expected = (success, value, offset, furthest);
 
         Assert.Equal(expected, Run(LiteralOperand, input));
+    }
+
+    [Theory]
+    // The operand of - or * is read with the tighter levels: the white space isn't skipped for typeof
+    [InlineData("-  ", 1)]
+    [InlineData("a*  b", 2)]
+    [InlineData("-  a", 1)]
+    // typeof is tried before the first operand
+    [InlineData("  a", 2)]
+    public void ShouldOnlyTestTheLevelsWhichAreTried(string input, int furthest)
+    {
+        var (success, _, offset, actual) = Run(LooserPrefix(Same), input);
+
+        Assert.Equal(input.Length > 0 && input[0] == 'a' ? (true, 1) : (false, 0), (success, offset));
+        Assert.Equal(furthest, actual);
     }
 
     [Fact]

@@ -12,7 +12,8 @@ namespace Parlot.Benchmarks;
 /// <summary>
 /// An Operators() table of twelve levels which builds a tree of nodes, like NCalc's: a postfix level, a right-associative
 /// level, prefix operators, then binary levels, at runtime and generated. Simple and Calls have no prefix operator,
-/// Prefixes has single ones and Chains has chains of them.
+/// Prefixes has single ones and Chains has chains of them. Arguments has few operators: most operands are followed by a
+/// comma or a parenthesis.
 /// </summary>
 [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public partial class ExpressionTableBenchmarks
@@ -20,7 +21,7 @@ public partial class ExpressionTableBenchmarks
     private Parser<ExpressionNode> _parser = null!;
     private string _input = "";
 
-    [Params("Simple", "Calls", "Prefixes", "Chains")]
+    [Params("Simple", "Calls", "Prefixes", "Chains", "Arguments")]
     public string Input { get; set; } = "Calls";
 
     public static string GetInput(string name) => name switch
@@ -29,6 +30,7 @@ public partial class ExpressionTableBenchmarks
         "Calls" => "state == 4 && a == 1 && f() == 1 || g(1 + 1, 1, 2, 3) && name == 4",
         "Prefixes" => "-a * b + !c == ~d && -(e - -f) || !g ?? h' ** 2",
         "Chains" => "- - a + !!b * ~-c ** 2 == !~-d && - - -e",
+        "Arguments" => "f(a, b, 1, g(c, d), h(e, 2, i), j, k(l, m, n), o(p), q, 3) + r(s, t, u(v, w))",
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 
