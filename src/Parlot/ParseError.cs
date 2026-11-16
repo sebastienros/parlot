@@ -29,7 +29,7 @@ public class ParseError
 
         return new ParseError
         {
-            Message = reason as string ?? reason.ToString(),
+            Message = reason as string ?? reason.ToString() ?? "",
             Position = cursor.FurthestPosition,
             Reason = reason
         };

@@ -160,7 +160,7 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
             cursor.ResetPosition(start);
             cursor.RestoreRecordedFailure(recorded);
-            cursor.RecordFailure(valueStart, _reason);
+            RecordFailure(cursor, valueStart);
         }
         else
         {
@@ -227,7 +227,21 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
             }
         }
 
-        cursor.RecordFailure(valueStart, _reason);
+        RecordFailure(cursor, valueStart);
+    }
+
+    // Without a reason, the failure is recorded as before: the overload taking one isn't inlined
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RecordFailure(Cursor cursor, int valueStart)
+    {
+        if (_reason is null)
+        {
+            cursor.RecordFailure(valueStart);
+        }
+        else
+        {
+            cursor.RecordFailure(valueStart, _reason);
+        }
     }
 
     private bool Convert(T value, ref ParseResult<U> result)

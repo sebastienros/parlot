@@ -89,7 +89,15 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
             {
                 cursor.ResetPosition(start);
                 cursor.RestoreRecordedFailure(recorded);
-                cursor.RecordFailure(valueStart, _reason);
+
+                if (_reason is null)
+                {
+                    cursor.RecordFailure(valueStart);
+                }
+                else
+                {
+                    cursor.RecordFailure(valueStart, _reason);
+                }
             }
             else
             {

@@ -121,12 +121,6 @@ public sealed partial class ParserSourceGenerator
 
         // (..., object Reason, ...): the reason recorded with the furthest failure, see Cursor.FurthestReason
         Reason = 8,
-
-        // out (int Offset, bool NestedTooDeeply)
-        OffsetAndNesting = Offset | Nesting,
-
-        // out (int Offset, int Line, int Column, bool NestedTooDeeply)
-        PositionAndNesting = Position | Nesting,
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)

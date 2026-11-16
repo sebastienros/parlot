@@ -60,7 +60,7 @@ public class FailureReasonParityTests
                 {
                     result = "#";
                     return value < 100;
-                }, 42))
+                }, (short)42))
                 .AndSkip(Terms.Char(';')).Eof(),
             "from19 ;", FailureReasonGrammars.TryParseThenTry, FailureReasonGrammars.TryParseThenTry),
         ["Octal"] = (
@@ -97,7 +97,7 @@ public class FailureReasonParityTests
         { "Number", "12 ab;", null, 3 },
         { "Not", "  let;", FailureFlags.A | FailureFlags.B, 2 },
         { "ThenTry", " from;", FailureReason.ReservedWord, 1 },
-        { "ThenTry", " 199;", 42, 1 },
+        { "ThenTry", " 199;", (short)42, 1 },
         { "ThenTry", " 99", null, 3 },
         { "Octal", " 0719;", FailureReason.InvalidDigit, 4 },
         { "Octal", "8;", FailureReason.InvalidDigit, 0 },

@@ -401,8 +401,8 @@ public sealed class SourceGenerationContext
     /// <summary>
     /// Returns the argument which passes a reason a parser records with a failure after the others, see
     /// <see cref="Cursor.RecordFailure(int, object)"/>: <c>", reason"</c>, or nothing when there is no reason. The reason is
-    /// a string literal, or a static field holding the boxed value of an <see langword="enum"/>, an integer, a
-    /// <see langword="bool"/> or a <see langword="char"/>, so that the generated code allocates nothing when it records it.
+    /// a string literal, or a static field holding the boxed value of an <see langword="enum"/> or an integer, so that the
+    /// generated code allocates nothing when it records it.
     /// </summary>
     /// <exception cref="NotSupportedException">The reason is of another type.</exception>
     internal string ReasonArgument(object? reason)
@@ -417,9 +417,13 @@ public sealed class SourceGenerationContext
             return $", {LiteralHelper.StringToLiteral(text)}";
         }
 
-        var literal = reason is Enum or bool or char or byte or sbyte or short or ushort or int or uint or long or ulong
-            ? LiteralHelper.ToLiteral(reason)
-            : null;
+        // A small integer is cast, so that the field holds a value of the type of the reason, like at runtime
+        var literal = reason switch
+        {
+            Enum or int or uint or long or ulong => LiteralHelper.ToLiteral(reason),
+            byte or sbyte or short or ushort => $"({SourceGenerationContext.GetTypeName(reason.GetType())})({LiteralHelper.ToLiteral(reason)})",
+            _ => null,
+        };
 
         if (literal is null)
         {

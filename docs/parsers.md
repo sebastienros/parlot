@@ -107,7 +107,8 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
 ```
 
 - The reason is a constant, like a message or an `enum` value boxed once in a static field, so that a rejection allocates
-  nothing. A source-generated parser takes a `string`, an `enum` value or an integer.
+  nothing. A source-generated parser takes a `string`, an `enum` value or an integer, which it boxes in a static field
+  of its own: compare reasons with `Equals`, not by reference.
 - A conversion which rejects values for different reasons records its own with
   `context.Scanner.Cursor.RecordFailure(offset, reason)` before it returns `false`, at the start of the value (the
   `start` argument of a `ThenTry` callback) or of the part of it which is wrong, like the digit `8` of an octal number.
@@ -120,7 +121,8 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
   the failure recorded before it, like it forgets that failure. The cursor keeps a single reason, so that nothing is
   saved when a lookahead starts: a reason its parser recorded where that failure already was is kept, and a reason
   recorded before the lookahead is forgotten when its parser records one further. Rejections with a reason inside a
-  lookahead are best avoided: give the reason to the lookahead, like `Not(parser, reason)`, instead.
+  lookahead are best avoided: give the reason to the lookahead, like `Not(parser, reason)`, instead. `AsToken` forgets the
+  reasons its parser recorded too, like its failures: give the reason to a parser around the token.
 - An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`.
 
 Source-generated parsers return the reason in their failure tuple, see

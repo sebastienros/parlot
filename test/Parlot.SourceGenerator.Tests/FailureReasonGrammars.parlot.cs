@@ -43,7 +43,7 @@ public static partial class FailureReasonGrammars
             {
                 result = "#";
                 return value < 100;
-            }, 42))
+            }, (short)42))
             .AndSkip(Terms.Char(';')).Eof();
 
     // An octal number, whose conversion records which digit is wrong

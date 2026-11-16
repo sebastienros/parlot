@@ -557,7 +557,14 @@ public class ParseContext
             }
         }
 
-        cursor.RecordFailure(valueStart, reason);
+        if (reason is null)
+        {
+            cursor.RecordFailure(valueStart);
+        }
+        else
+        {
+            cursor.RecordFailure(valueStart, reason);
+        }
     }
 
     /// <summary>
