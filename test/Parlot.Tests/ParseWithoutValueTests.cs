@@ -168,6 +168,20 @@ public class ParseWithoutValueTests
     }
 
     [Fact]
+    public void InterpolatedShouldMatchParse()
+    {
+        string[] inputs = ["", "`", "``", "`a`", "`a${b}c`", "`a${b`", "`a${`b${a}`}c`", " `${a} ${b}`", "`a${ b }`", "`a", "`a${b c}`"];
+
+        var hole = Deferred<IReadOnlyList<char>>();
+        var template = Terms.Interpolated("`", "`", "${", "}", hole);
+        hole.Parser = OneOf(OneOrMany(Terms.Char('b')), OneOrMany(Terms.Char('a')), template.Then(static x => (IReadOnlyList<char>)[]));
+
+        AssertSameAsParse(template, inputs);
+        AssertSameAsParse(Literals.Interpolated("`", "`", "${", "}", A), inputs);
+        AssertSameAsParse(Capture(template), inputs);
+    }
+
+    [Fact]
     public void SeparatedShouldMatchParse()
     {
         AssertSameAsParse(Separated(B, As));

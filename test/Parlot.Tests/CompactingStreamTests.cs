@@ -42,6 +42,26 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void InterpolatedTextsKeepTheBufferBounded()
+    {
+        // A template doesn't pin its start: only its chunks and the tokens of its holes are buffered while they are read
+        var parser = Literals.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Eof();
+        var text = "`" + string.Concat(Enumerable.Range(0, 5_000).Select(static i => "chunk " + i + " ${ hole" + i + " }")) + " end`";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+
+        Assert.Equal(5_000, parser.Parse(new ChunkedReader(text, 3), options));
+        Assert.InRange(peak(), 1, 64);
+
+        // A chunk is a token, buffered while it is read
+        var longChunk = "`" + new string('a', 1_000) + "${b}`";
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+
+        Assert.Equal(1, parser.Parse(new ChunkedReader(longChunk, 3), options));
+        Assert.InRange(peak(), 1_000, 4_096);
+    }
+
+    [Fact]
     public void RepetitionsKeepTheBufferBounded()
     {
         var parser = ZeroOrMany(Terms.Identifier()).Eof();

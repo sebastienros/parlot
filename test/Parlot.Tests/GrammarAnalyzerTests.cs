@@ -326,6 +326,20 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void InterpolatedTextAfterItsOpeningTextIsReported()
+    {
+        // The text only matches where its opening delimiter does
+        var parser = Terms.Text("`").Then(static _ => 0).Or(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.ShadowedAlternative);
+
+        Assert.Equal(1, finding.Alternative);
+        Assert.Contains("alternative 2 (Terms.Interpolated(...))", finding.Message);
+        Assert.Equal(0, parser.Parse("`a${b}`"));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Or(Terms.Text("`").Then(static _ => 0))));
+    }
+
+    [Fact]
     public void LongerTextFirstIsNotReported()
     {
         Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("<=").Or(Terms.Text("<"))));
