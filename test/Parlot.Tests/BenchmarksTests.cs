@@ -1026,6 +1026,21 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void SeparatedLast()
+    {
+        foreach (var count in new[] { 0, 2, 8 })
+        {
+            foreach (var withRest in new[] { false, true })
+            {
+                // The setup checks that each parser returns the list
+                var benchmarks = new SeparatedLastBenchmarks { Count = count, WithRest = withRest };
+                benchmarks.Setup();
+                Assert.Equal(count + (withRest ? 1 : 0), benchmarks.SeparatedRuntime());
+            }
+        }
+    }
+
+    [Fact]
     public void GeneratedConfiguration()
     {
         var benchmarks = new IfSelectBenchmarks { Condition = true, Match = true };

@@ -67,6 +67,24 @@ public static partial class Parsers
         new Separated<U, T>(separator, parser, min, max, removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator);
 
     /// <summary>
+    /// Builds a parser for values separated by another parser, which can end with a <paramref name="last"/> element of
+    /// another kind that no separator follows, like the rest element of JavaScript's parameters <c>(a, b, ...rest)</c>.
+    /// </summary>
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The parser for each value but the last one.</param>
+    /// <param name="last">The parser for an element which ends the list. It is tried where a value would be, where the list
+    /// starts and after each separator, when <paramref name="parser"/> doesn't match.</param>
+    /// <param name="min">The minimum number of values, the last one included. Zero allows an empty list.</param>
+    /// <param name="allowTrailingSeparator">Whether to consume a separator after the last value of <paramref name="parser"/>.
+    /// No separator is consumed after <paramref name="last"/>.</param>
+    /// <param name="removeEmptyEntries">Whether to skip successive separators, before the last element too.</param>
+    /// <remarks>An element is only found when it reads text. The list holds the values and the last element.</remarks>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(
+        Parser<U> separator, Parser<T> parser, Parser<T> last,
+        int min = 0, bool allowTrailingSeparator = false, bool removeEmptyEntries = false) =>
+        new Separated<U, T>(separator, parser, last, min, allowTrailingSeparator, removeEmptyEntries);
+
+    /// <summary>
     /// Builds a parser that skips white spaces before another one.
     /// </summary>
     public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);

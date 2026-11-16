@@ -168,6 +168,9 @@ public class StreamingTests
         ["guarded-separated"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Terms.Char(',').AndSkip(Literals.Char('|').Optional()), Terms.Identifier()).AndSkip(Terms.Char(';'))),
         // The first value can match without reading, before a separator (#503)
         ["separated-empty-first"] = new Grammar<IReadOnlyList<string>>(Separated(Terms.Char('.'), Terms.Identifier().Then(static x => x.ToString()).Or(Always(""))).AndSkip(Terms.Char(';'))),
+        // A last element ends the list, no separator follows it (#588)
+        ["separated-last"] = new Grammar<IReadOnlyList<string>>(Separated(Terms.Char(','), Terms.Identifier().Then(static x => x.ToString()), Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x.ToString()), min: 0).AndSkip(Terms.Char(';'))),
+        ["separated-last-options"] = new Grammar<IReadOnlyList<string>>(Separated(Terms.Char(','), Terms.Identifier().Then(static x => x.ToString()), Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x.ToString()), min: 1, allowTrailingSeparator: true, removeEmptyEntries: true).AndSkip(Terms.Char(';'))),
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         // Nested lists of the same element type share the scratch stack of the list parsers
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
@@ -519,6 +522,9 @@ public class StreamingTests
         Add("guarded-loop", "", "}", " }", "let a; }", "let a;let b;}", "let a; le }", "let a; let }", "let a;\n\n }", "let a; x }", "let");
         Add("guarded-separated", "", "a;", "a , b ;", "a,|b,c;", "a, ;", "a,| ;", "a ,", "a  ;", "a b");
         Add("separated-empty-first", "", ";", ".;", ".a.b;", " . . a . b ;", "a..b;", "a.;", "a.b", ".", "..", "a b;", "+");
+        string[] lastLists = ["", ";", "a;", "...r;", "a, b, ...r;", "a , ... r ;", "a, ...r, b;", "a, ...r,;", "a, b,;", "a, , ...r;", "a,,;", "a, ...;", ", a;", "...", "a, ."];
+        Add("separated-last", lastLists);
+        Add("separated-last-options", lastLists);
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");
         Add("text-ci-matched", "", "HELLO hello Hello HELLO", "FOR for hello", "HeLLo FoR fore");
