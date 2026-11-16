@@ -9,7 +9,6 @@ namespace Parlot.Fluent;
 public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IDeferredParser
 {
 
-    private readonly object _lockObject = new();
     private Parser<T>? _parser;
 
     // Whether the parser is invoked without its value when this one's isn't used. A pair read while the parser is replaced
@@ -281,8 +280,6 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
         }
     }
 
-    private bool _toString;
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -312,25 +309,8 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
         return result;
     }
 
-    public override string ToString()
-    {
-        // Handle recursion
-
-        lock (_lockObject)
-        {
-            if (!_toString)
-            {
-                _toString = true;
-                var result = Name == null
-                    ? $"{Parser} (Deferred)"
-                    : $"{Name} (Deferred)";
-                _toString = false;
-                return result;
-            }
-            else
-            {
-                return "(Deferred)";
-            }
-        }
-    }
+    // A Deferred reached again, in its own text or through another path, is written as a reference
+    public override string ToString() => Name is null
+        ? FormatOnce($"{Parser} (Deferred)")
+        : $"{Name} (Deferred)";
 }

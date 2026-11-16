@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IRecordsSkippedWhiteSpace
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IRecordsSkippedWhiteSpace, IInvokesOnlyLiterals
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -79,7 +79,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private byte _whiteSpace;
 
     // The number of alternatives up to which a choice which invokes them before the white space tries them in order, without
-    // a lookup table
+    // a lookup table, when they all fail at their first char without invoking another parser, see AllInvokeOnlyLiterals()
     private const int MaxAlternativesInOrder = 2;
 
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
@@ -531,8 +531,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             LeadingWhiteSpace.EndResolving(this);
         }
 
-        // The tables are written before the mode, which the parsers read first. Two alternatives are tried in order: reading
-        // the char after the white space costs about what the one which doesn't match does.
+        // The tables are written before the mode, which the parsers read first.
         if (canSkip)
         {
             // A compacting buffer searches the white space for the parsers when they look for the same new lines, and can
@@ -541,7 +540,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             _newLines = newLines.NewLines;
         }
 
-        if ((!canSkip || !_sameNewLines) && _originalParsers.Length > MaxAlternativesInOrder)
+        // The alternatives are invoked before the white space unless it is recorded for them. Up to two literals, or parsers
+        // which only wrap them, are tried in order: reading the char after the white space costs about what the one which
+        // doesn't match does. A composite alternative, even a single one, invokes what it starts with before it fails, so the
+        // table selects them then (#581).
+        if ((!canSkip || !_sameNewLines) && (_originalParsers.Length > MaxAlternativesInOrder || !AllInvokeOnlyLiterals(_originalParsers)))
         {
             (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
         }
@@ -595,6 +598,23 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
             return true;
         }
+    }
+
+    // A nested choice of literals, which only reads the text, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => AllInvokeOnlyLiterals(_originalParsers);
+
+    // Whether no alternative invokes another parser than literals, see IInvokesOnlyLiterals
+    private static bool AllInvokeOnlyLiterals(Parser<T>[] parsers)
+    {
+        foreach (var parser in parsers)
+        {
+            if (!InvokesOnlyLiterals.Of(parser))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // The lookup table of a choice which invokes its alternatives before the white space: the alternatives themselves, which
@@ -1150,7 +1170,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         return false;
     }
 
-    public override string ToString() => $"{string.Join(" | ", Parsers)} on [{string.Join(" ", ExpectedChars)}]";
+    public override string ToString() => FormatOnce($"{new ParserList(" | ", Parsers)} on [{new ParserList(" ", ExpectedChars)}]");
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

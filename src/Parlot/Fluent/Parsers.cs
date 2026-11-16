@@ -133,6 +133,14 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
+    /// Builds a parser that succeeds when the specified parser fails to match, and records why it fails otherwise:
+    /// <paramref name="reason"/> is <see cref="Cursor.FurthestReason"/> when the parse fails where the parser matched.
+    /// </summary>
+    /// <param name="parser">The parser which must not match.</param>
+    /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
+    public static Parser<T> Not<T>(Parser<T> parser, object reason) => new Not<T>(parser, reason);
+
+    /// <summary>
     /// Builds a parser that succeeds with the value of the specified parser when it matches, without consuming any input
     /// (positive lookahead, the PEG <c>&amp;p</c>).
     /// </summary>
@@ -406,6 +414,26 @@ public class LiteralBuilder
     /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
     /// </param>
     public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => new StringLiteral(quotes, escapes, returnDecoded);
+
+    /// <summary>
+    /// Builds a parser that matches an interpolated text, like a template literal: a text between <paramref name="open"/>
+    /// and <paramref name="close"/>, with escapes, and with holes between <paramref name="holeOpen"/> and
+    /// <paramref name="holeClose"/> whose values <paramref name="hole"/> reads.
+    /// </summary>
+    /// <remarks>
+    /// The value holds the raw text of the chunks, see <see cref="Interpolation{T}"/>: an escape char skips the char after it,
+    /// and the escape sequences aren't decoded. White space is skipped before <paramref name="holeClose"/>, as a
+    /// <see cref="Parsers.Terms"/> parser does, unless <paramref name="options"/> holds
+    /// <see cref="InterpolationOptions.NoWhiteSpaceBeforeHoleClose"/>. See <see cref="Parlot.Fluent.Interpolated{T}"/>.
+    /// </remarks>
+    /// <param name="open">The opening delimiter of the text, like <c>"`"</c>.</param>
+    /// <param name="close">The closing delimiter of the text, like <c>"`"</c>.</param>
+    /// <param name="holeOpen">The opening delimiter of a hole, like <c>"${"</c>.</param>
+    /// <param name="holeClose">The closing delimiter of a hole, like <c>"}"</c>.</param>
+    /// <param name="hole">The parser of the value of a hole, which can hold interpolated texts too.</param>
+    /// <param name="options">Whether a chunk can hold new lines, and whether white space is skipped before <paramref name="holeClose"/>.</param>
+    /// <param name="escape">The escape char, which skips the char after it, or <c>'\0'</c> for none.</param>
+    public Parser<Interpolation<T>> Interpolated<T>(string open, string close, string holeOpen, string holeClose, Parser<T> hole, InterpolationOptions options = InterpolationOptions.None, char escape = '\\') => new Interpolated<T>(open, close, holeOpen, holeClose, hole, options, escape);
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
@@ -719,6 +747,13 @@ public class TermBuilder
     /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
     /// </param>
     public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => SkipWhiteSpace(new StringLiteral(quotes, escapes, returnDecoded));
+
+    /// <summary>
+    /// Builds a parser that matches an interpolated text after the white space, see
+    /// <see cref="LiteralBuilder.Interpolated{T}(string, string, string, string, Parser{T}, InterpolationOptions, char)"/>.
+    /// </summary>
+    /// <inheritdoc cref="LiteralBuilder.Interpolated{T}(string, string, string, string, Parser{T}, InterpolationOptions, char)"/>
+    public Parser<Interpolation<T>> Interpolated<T>(string open, string close, string holeOpen, string holeClose, Parser<T> hole, InterpolationOptions options = InterpolationOptions.None, char escape = '\\') => SkipWhiteSpace(new Interpolated<T>(open, close, holeOpen, holeClose, hole, options, escape));
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.

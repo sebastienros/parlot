@@ -19,6 +19,21 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         _lookahead = lookahead ?? throw new ArgumentNullException(nameof(lookahead));
     }
 
+    /// <summary>
+    /// Creates a parser failing when <paramref name="lookahead"/> matches after <paramref name="parser"/>, which records
+    /// <paramref name="reason"/> with the failure, see <see cref="Cursor.FurthestReason"/>.
+    /// </summary>
+    /// <param name="parser">The parser reading the value.</param>
+    /// <param name="lookahead">The parser which must not match after it.</param>
+    /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
+    public WhenNotFollowedBy(Parser<T> parser, Parser<object> lookahead, object reason) : this(parser, lookahead)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    // Recorded with the failure when the lookahead matches, null when there is none
+    private readonly object? _reason;
+
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
 
@@ -72,7 +87,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         // follow, wherever it was read up to.
         if (lookaheadSuccess)
         {
-            context.RecordRejected(beforeLookahead, recorded, _lookahead is ISeekable { SkipWhitespace: true });
+            context.RecordRejected(beforeLookahead, recorded, _lookahead is ISeekable { SkipWhitespace: true }, _reason);
             cursor.ResetPosition(start);
             context.ExitParser(this);
             return false;
@@ -141,7 +156,9 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         result.Body.Add($"    if ({lookahead})");
         result.Body.Add("    {");
         // The failure is at the start of what must not follow, wherever it was read up to
-        result.Body.Add($"        {context.ParseContextName}.RecordRejected({beforeLookaheadName}, {recordedName}, {(_lookahead is ISeekable { SkipWhitespace: true } ? "true" : "false")});");
+        // A reason is a constant, recorded with the failure
+        var reason = context.ReasonArgument(_reason);
+        result.Body.Add($"        {context.ParseContextName}.RecordRejected({beforeLookaheadName}, {recordedName}, {(_lookahead is ISeekable { SkipWhitespace: true } ? "true" : "false")}{reason});");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");
@@ -157,5 +174,5 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         return result;
     }
 
-    public override string ToString() => $"{_parser} (WhenNotFollowedBy {_lookahead})";
+    public override string ToString() => FormatOnce($"{_parser} (WhenNotFollowedBy {_lookahead})");
 }

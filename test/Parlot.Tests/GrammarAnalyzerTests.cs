@@ -118,6 +118,27 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void AlternativeStartingWithALookaheadIsReportedForTheParserAfterIt()
+    {
+        // The parser after the lookahead doesn't tell which chars it can start with
+        var parser = Literals.Text("1").Or(Not(Literals.Char('a')).SkipAnd(Literals.Pattern(static c => c != '1')).Then(static x => x.ToString()));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("tests the chars with a predicate", finding.Message);
+
+        // The lookahead's parser doesn't skip the white space which the parser after it skips
+        parser = Literals.Text("1").Or(Not(Literals.Char('a')).SkipAnd(Terms.Char('b')).Then(static x => x.ToString()));
+        finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+        Assert.Contains("don't both skip white space", finding.Message);
+
+        // The parser after it tells them, and the lookahead's parser skips the white space it skips: the alternative has its
+        // hints
+        var seekable = Terms.Integer().Then(static _ => "").Or(Not(Terms.Char('a')).SkipAnd(Terms.Identifier()).Then(static x => x.ToString()));
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(seekable), static finding => finding.Rule == GrammarRule.UnseekableAlternative);
+    }
+
+    [Fact]
     public void AlternativeThatCantTellIfItSkipsWhiteSpaceIsReported()
     {
         var parser = Terms.Text("a").Or(ZeroOrOne(Terms.Char('-')).SkipAnd(Terms.Text("b")));
@@ -323,6 +344,20 @@ public class GrammarAnalyzerTests
         Assert.Equal("Try Terms.Text(\"<=\") before Terms.Text(\"<\")", finding.Fix.Title);
         Assert.False(finding.Fix.PreservesBehavior);
         Assert.Empty(GrammarAnalyzer.Analyze(Reorder(parser, finding.Fix)));
+    }
+
+    [Fact]
+    public void InterpolatedTextAfterItsOpeningTextIsReported()
+    {
+        // The text only matches where its opening delimiter does
+        var parser = Terms.Text("`").Then(static _ => 0).Or(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.ShadowedAlternative);
+
+        Assert.Equal(1, finding.Alternative);
+        Assert.Contains("alternative 2 (Terms.Interpolated(...))", finding.Message);
+        Assert.Equal(0, parser.Parse("`a${b}`"));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Or(Terms.Text("`").Then(static _ => 0))));
     }
 
     [Fact]

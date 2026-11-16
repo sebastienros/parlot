@@ -351,6 +351,24 @@ was reached, and `false` for every other failure, an `Error`, an `ElseError` and
 included. It is what `ParseException.IsNestedTooDeeply` and `ParseError.IsNestedTooDeeply` report at runtime. It costs
 nothing until such a failure: the entry point reads it in the handler of the exception which ended the parse.
 
+To also learn why the parse failed there, add an `object` element before the `bool`, or last, as in
+`out (int Offset, object? Reason)` or `out (int Offset, int Line, int Column, object? Reason, bool NestedTooDeeply)`. It is
+the reason a `When(predicate, reason)`, `ThenTry(conversion, reason)`, `Not(parser, reason)` or
+`WhenNotFollowedBy(lookahead, reason)` recorded at the furthest failure, or a conversion with
+`context.Scanner.Cursor.RecordFailure(offset, reason)`, like the runtime `ParseError.Reason` (see
+[Why it failed there](parsers.md#why-it-failed-there)), and `null` when there is none, for an `Error` or an `ElseError`
+too. A reason is a `string`, which the generated code writes as a literal, or an `enum` value, an integer, a `bool` or a
+`char`, which it holds boxed in a static field: recording it allocates nothing.
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, int Line, int Column, object? Reason) failure);
+
+if (!Script.TryParse(source, out var value, out var failure))
+{
+    throw new FormatException($"{failure.Reason as string ?? "Syntax error"} at line {failure.Line}, column {failure.Column}.");
+}
+```
+
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
 normal forwarding method otherwise). When only this overload is declared, the parser is generated for it. A string and

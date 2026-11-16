@@ -60,7 +60,7 @@ internal sealed class GrammarAnalysis
         "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "NoNewLineBefore",
         "When", "ThenTry", "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "AsToken", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
-        "RightAssociativeWithContext", "AssociativeWithOperator",
+        "RightAssociativeWithContext", "AssociativeWithOperator", "Interpolated",
     };
 
     // Parlot's parsers which succeed exactly when the parser they invoke does, at the same position
@@ -477,6 +477,26 @@ internal sealed class GrammarAnalysis
                     "TextLiteral" => $"{Describe(parser)} uses a culture-sensitive comparison; use an ordinal one",
                     _ => $"{Describe(parser)} doesn't tell which chars it can start with",
                 };
+            }
+
+            // A sequence which starts with a lookahead has the hints of its parser, and of the parser after it for a Not: the
+            // cause is in one of them, or in the white space only one of them skips. The conditions are those of
+            // SeekableHints.Sequence.
+            if (first is ILookahead lookahead && parser is SourceGeneration.ISequenceSourceable { Parts: [_, var (next, _, _)] })
+            {
+                if (lookahead.Parser is not ISeekable { CanSeek: true })
+                {
+                    parser = lookahead.Parser;
+                    continue;
+                }
+
+                if (!lookahead.MatchesParser && next is not ISeekable { CanSeek: true })
+                {
+                    parser = next;
+                    continue;
+                }
+
+                return $"it starts with {Describe(first)}: its parser {Describe(lookahead.Parser)} and {Describe(next)} don't both skip white space, which a choice skipping it first would change";
             }
 
             if (first is ISeekable { CanSeek: true })
@@ -985,6 +1005,7 @@ internal sealed class GrammarAnalysis
             "SpanScannerLiteral" => "Scan(...)",
             "IdentifierLiteral" or "Identifier" => "Identifier(...)",
             "StringLiteral" => "String(...)",
+            "Interpolated" => "Interpolated(...)",
             "WhiteSpaceLiteral" => "WhiteSpace(...)",
             "NonWhiteSpaceLiteral" => "NonWhiteSpace(...)",
             "ListOfCharsLiteral" or "SearchValuesCharLiteral" => "AnyOf(...)",

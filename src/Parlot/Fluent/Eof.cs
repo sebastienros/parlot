@@ -155,5 +155,5 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
         return result;
     }
 
-    public override string ToString() => $"{_parser} (Eof)";
+    public override string ToString() => FormatOnce($"{_parser} (Eof)");
 }

@@ -9,7 +9,8 @@ namespace Parlot.Benchmarks;
 
 // NoNewLineBefore alternatives of choices which skip the white space for their alternatives, as JavaScript's postfix
 // operators and arrows. Before #551 such a choice had no lookup table and tried its alternatives in order; it now selects
-// them with the char after the white space. The Plain rows are the same grammars without NoNewLineBefore.
+// them with the char after the white space, and since #581 also when it has only two alternatives which aren't literals, like
+// the ones of Arrows and Tails. The Plain rows are the same grammars without NoNewLineBefore.
 
 [MemoryDiagnoser, ShortRunJob, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), CategoriesColumn]
 public class NoNewLineBeforeBenchmarks
@@ -19,6 +20,19 @@ public class NoNewLineBeforeBenchmarks
 
     // 800 statements: assignments, arrows, and arrows after a new line, which start a statement of their own
     private static readonly string Statements = string.Join("\n", Enumerable.Range(0, 200).Select(static i => $"a{i} = b c => d e\n=> f"));
+
+    // 1000 statements, of which one in five has an assignment tail and one in ten an arrow tail, as conditional expressions
+    private static readonly string Tails = string.Concat(Enumerable.Range(0, 1000).Select(static i => (i % 10) switch
+    {
+        0 or 5 => $"a{i} >>= b;",
+        3 => $"c{i} => d;\n",
+        _ => $"e{i};\n",
+    })).TrimEnd();
+
+    private static readonly string[] AssignmentOperators = ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "&=", "|=", "^=", "**=", "&&=", "||=", "??="];
+
+    private readonly Parser<int> _twoAlternativeTails = CreateTwoAlternativeTails();
+    private readonly Parser<int> _perOperatorTails = CreatePerOperatorTails();
 
     private readonly Parser<int> _postfixTable = PostfixTable(NoNewLineBefore);
     private readonly Parser<int> _plainPostfixTable = PostfixTable(static p => p);
@@ -45,11 +59,31 @@ public class NoNewLineBeforeBenchmarks
         return ZeroOrMany(OneOf(statement, arrowStatement)).Eof().Then(static x => x.Count);
     }
 
+    // The tail of a JavaScript conditional expression: an assignment operator and its operand, or an arrow which can't follow a
+    // new line. Before #581 the choice of these two alternatives tried them in order.
+    private static Parser<int> CreateTwoAlternativeTails()
+    {
+        var assignmentOperator = OneOf(AssignmentOperators.Select(static o => Terms.Text(o)).ToArray());
+        var assignment = assignmentOperator.And(Terms.Identifier()).Then(static _ => 1);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static _ => 2);
+        return TailStatements(OneOf(assignment, arrow));
+    }
+
+    // The same tail, written with an alternative per operator
+    private static Parser<int> CreatePerOperatorTails()
+    {
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static _ => 2);
+        return TailStatements(OneOf(AssignmentOperators.Select(static o => Terms.Text(o).SkipAnd(Terms.Identifier()).Then(static _ => 1)).Append(arrow).ToArray()));
+    }
+
+    private static Parser<int> TailStatements(Parser<int> tail)
+        => ZeroOrMany(Terms.Identifier().SkipAnd(tail.Else(0)).AndSkip(Terms.Char(';'))).Eof().Then(static x => x.Sum());
+
     [GlobalSetup]
     public void Setup()
     {
         if (PostfixTable() != 200 || PlainPostfixTable() != 200 || Arrows() != 800 || PlainArrows() != 600
-            || PostfixTableGenerated() != 200 || ArrowsGenerated() != 800)
+            || PostfixTableGenerated() != 200 || ArrowsGenerated() != 800 || TwoAlternativeTails() != 400 || PerOperatorTails() != 400)
         {
             throw new InvalidOperationException("Incorrect NoNewLineBefore parsing.");
         }
@@ -73,6 +107,12 @@ public class NoNewLineBeforeBenchmarks
 
     [Benchmark, BenchmarkCategory("Arrows")]
     public int ArrowsGenerated() => NoNewLineBeforeGenerated.TryParseArrows(Statements, out var value) ? value : -1;
+
+    [Benchmark(Baseline = true), BenchmarkCategory("Tails")]
+    public int TwoAlternativeTails() => _twoAlternativeTails.Parse(Tails);
+
+    [Benchmark, BenchmarkCategory("Tails")]
+    public int PerOperatorTails() => _perOperatorTails.Parse(Tails);
 }
 
 public static partial class NoNewLineBeforeGenerated

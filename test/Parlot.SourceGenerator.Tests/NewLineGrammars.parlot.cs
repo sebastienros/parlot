@@ -76,6 +76,24 @@ public static partial class NewLineGrammars
     [GenerateParser(nameof(TryParseArrowChoiceWithComments))]
     private static Parser<string> BuildArrowChoiceWithComments() => ArrowChoiceWithComments();
 
+    // A choice of two composite alternatives, an assignment and an arrow which can't follow a new line, which selects them
+    // with its table (#581)
+    internal static Parser<string> ArrowTail()
+    {
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2.ToString());
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x.ToString());
+        return Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+    }
+
+    [GenerateParser(nameof(TryParseArrowTail))]
+    private static Parser<string> BuildArrowTail() => ArrowTail();
+
+    internal static Parser<string> ArrowTailWithComments() =>
+        ArrowTail().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    [GenerateParser(nameof(TryParseArrowTailWithComments))]
+    private static Parser<string> BuildArrowTailWithComments() => ArrowTailWithComments();
+
     // Postfix operators which can't follow a new line, in a table with binary operators
     internal static Parser<string> PostfixTable()
     {
