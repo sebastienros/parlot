@@ -217,6 +217,16 @@ public class Cursor
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative.</exception>
     public TextPosition GetPosition(int offset)
     {
+        var lines = _lines;
+
+        // Forward from the furthest position requested, the common case, without a '\r' a '\n' can still follow
+        if (lines is not null && offset > lines.FrontierOffset && offset - _base <= _textLength && (_flags & CrLfFlag) == 0)
+        {
+            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
+            lines.SetFrontier(position);
+            return position;
+        }
+
         if (offset < _originOffset || offset - _base > _textLength)
         {
             return GetPositionOutsideOrigin(offset);
@@ -380,8 +390,8 @@ public class Cursor
             return new TextPosition(offset, lines.FrontierLine, lines.FrontierColumn - (lines.FrontierOffset - offset));
         }
 
-        // The line of the offset is the origin's when it starts before it
-        var start = FindLineStart(offset);
+        // The line of the offset is the origin's when it starts before it. Each terminator ends a line without "\r\n".
+        var start = (_flags & CrLfFlag) == 0 ? _base + GetSpan(_base, offset - _base).LastIndexOfAny(NewLines.AsSpan()) + 1 : FindLineStart(offset);
 
         return start > _originOffset
             ? new TextPosition(offset, lines.FrontierLine - newLines, offset - start + 1)
@@ -429,26 +439,31 @@ public class Cursor
         if (newLines.Length == 1)
         {
             // The common case, vectorized: a single terminator is never part of a "\r\n"
+            // The last one first: the text between two requests usually has none
             var newLine = newLines[0];
+            var last = text.LastIndexOf(newLine);
+
+            if (last < 0)
+            {
+                return 0;
+            }
+
+            lastStart = from + last + 1;
+            text = text.Slice(0, last);
 #if NET8_0_OR_GREATER
-            count = text.Count(newLine);
+            return text.Count(newLine) + 1;
 #else
-            var rest = text;
+            count = 1;
             int index;
 
-            while ((index = rest.IndexOf(newLine)) >= 0)
+            while ((index = text.IndexOf(newLine)) >= 0)
             {
                 count++;
-                rest = rest.Slice(index + 1);
-            }
-#endif
-
-            if (count > 0)
-            {
-                lastStart = from + text.LastIndexOf(newLine) + 1;
+                text = text.Slice(index + 1);
             }
 
             return count;
+#endif
         }
 
 #if NET8_0_OR_GREATER
