@@ -64,6 +64,10 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     private readonly object[] _first;
     private ForwardedHints? _hints;
 
+    // The chars the operators of the prefix levels from _prefixLevels[i] to the tightest one can start with, for each i, built
+    // when they are first tried: null for levels whose operators can start with any char
+    private OperatorStart?[]? _prefixStarts;
+
     /// <summary>
     /// Creates a parser with no operators, which parses the values of <paramref name="operand"/>. Levels are added with
     /// <see cref="Unary{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
@@ -630,17 +634,64 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         // The choice of a lookup from the start of the segment, which tries the operators of all the levels from there. When
         // the segment starts with a level of valued operators, the choice starts with their probe.
-        public OneOf<int>? Choice;
+        public LookupChoice? Choice;
 
         // The choice of a lookup from the first level without valued operators, when the segment starts with a level of
         // valued operators, which tries the operators of all the looser levels from there
-        public OneOf<int>? PlainChoice;
+        public LookupChoice? PlainChoice;
+    }
+
+    /// <summary>
+    /// The choice of a lookup, and the chars its operators can start with, which are tested before it is invoked.
+    /// </summary>
+    private sealed class LookupChoice
+    {
+        public LookupChoice(OneOf<int> choice)
+        {
+            Choice = choice;
+            Start = OperatorStart.Create([choice]);
+        }
+
+        public OneOf<int> Choice { get; }
+
+        // Null when an operator can start with any char
+        public OperatorStart? Start { get; }
+
+        // Whether an operator of the choice can start at the cursor, then whether it matched one
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Parse(ParseContext context, ref ParseResult<int> result) =>
+            (Start is null || Start.MayStart(context)) && Choice.Parse(context, ref result);
+    }
+
+    // Whether an operator of the prefix levels from _prefixLevels[top] to the tightest one can start at the cursor. The other
+    // levels aren't tried, and their operators may skip white space where the ones of these levels don't.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool MayStartPrefix(ParseContext context, int top) =>
+        (Volatile.Read(ref _prefixStarts) ?? BuildPrefixStarts())[top] is not { } start || start.MayStart(context);
+
+    // The tables of the prefix levels, built once the grammar is complete
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private OperatorStart?[] BuildPrefixStarts()
+    {
+        var choices = new List<object>();
+        var starts = new OperatorStart?[_prefixLevels.Length];
+
+        for (var i = 0; i < _prefixLevels.Length; i++)
+        {
+            var level = _levels[_prefixLevels[i]];
+            choices.Add(level.ValuedPrefix?.Choice ?? level.Choice!);
+            starts[i] = OperatorStart.Create(choices);
+        }
+
+        Volatile.Write(ref _prefixStarts, starts);
+        return starts;
     }
 
     // The choice of the operators which can follow an operand, from the start of the segment, or from its first level
     // without valued operators when plain is true, to the end of the table. The levels of valued operators are probed. It
-    // is built when it is first used since a table is usually built level by level. Null when there are none.
-    private OneOf<int>? GetChoice(Segment segment, bool plain)
+    // is built when it is first used since a table is usually built level by level, and once the grammar is complete, with
+    // the chars its operators can start with. Null when there are none.
+    private LookupChoice? GetChoice(Segment segment, bool plain)
     {
         plain = plain && segment.Valued >= 0;
         var probed = !plain && segment.Valued >= 0;
@@ -673,7 +724,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 AddPlainOperators(_segments[next], operators);
             }
 
-            choice = new OneOf<int>(operators.ToArray());
+            choice = new LookupChoice(new OneOf<int>(operators.ToArray()));
             choice = Interlocked.CompareExchange(ref field, choice, null) ?? choice;
         }
 
@@ -1013,7 +1064,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             i--;
         }
 
-        if (i >= 0)
+        // Most operands have no prefix operator, and the char they start with is none an operator starts with
+        if (i >= 0 && MayStartPrefix(context, i))
         {
             var start = context.Scanner.Cursor.Offset;
 
@@ -1060,6 +1112,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// </summary>
     internal int MatchPrefixes(ParseContext context, int top, ref ParseResult<int> operatorResult)
     {
+        if (!MayStartPrefix(context, top))
+        {
+            return -1;
+        }
+
         var offset = context.Scanner.Cursor.Offset;
 
         // The operators of each level are tried from the same position
@@ -1263,6 +1320,10 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// Looks for an operator following an operand, from the level <paramref name="lowest"/>. The operators of a level of
     /// valued operators are only probed, and the level that applies them parses them.
     /// </summary>
+    /// <remarks>
+    /// A choice is only invoked when one of its operators can start with the char after the operand, which is usually
+    /// <c>,</c>, <c>)</c> or <c>;</c>, see <see cref="OperatorStart"/>.
+    /// </remarks>
     private bool Lookup(ParseContext context, int lowest, ref Lookahead next)
     {
         next.Offset = context.Scanner.Cursor.Offset;
@@ -1300,7 +1361,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         var segment = _segments[lowest];
-        OneOf<int>? choice;
+        LookupChoice? choice;
 
         if (lowest == segment.Valued)
         {
@@ -1436,7 +1497,18 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
-        var segmentHelpers = new Dictionary<Segment, (string? Choice, string? Plain)>();
+        // The expressions testing the char the operators of the choices can start with, see OperatorStart, inlined where the
+        // choices are invoked: a local function cost ExprBench.ParlotGeneratedBig 6%, whose operators are all after white
+        // space. A reader is read through the choices, which pin the white space, as are the diagnostics collected.
+        string? StartTest(OperatorStart? start) =>
+            compacting || context.CollectDiagnostics || start is null ? null : start.GenerateTest(context, cursor);
+
+        // The call of a choice of the lookup, only when one of its operators can start with the char after the operand
+        string? LookupCall(LookupChoice? choice) => choice is null
+            ? null
+            : $"{(StartTest(choice.Start) is { } test ? $"{test} && " : "")}{ChoiceHelper(choice.Choice)}({ctx}, out next)";
+
+        var segmentChoices = new Dictionary<Segment, (LookupChoice? Choice, LookupChoice? Plain)>();
 
         if (_hasFollowingOperators)
         {
@@ -1444,9 +1516,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 var segmentChoice = GetChoice(segment, plain: false);
                 var plainChoice = segment.Valued >= 0 ? GetChoice(segment, plain: true) : null;
-                segmentHelpers[segment] = (segmentChoice is null ? null : ChoiceHelper(segmentChoice), plainChoice is null ? null : ChoiceHelper(plainChoice));
+                segmentChoices[segment] = (segmentChoice, plainChoice);
             }
         }
+
+        // The test of the prefix levels from each one to the tightest one
+        var prefixStarts = Array.ConvertAll(Volatile.Read(ref _prefixStarts) ?? BuildPrefixStarts(), StartTest);
 
         // The start of the call of the factory of each operator, up to its first operand, which can receive the context
         var factories = new string[_operatorLevels.Length];
@@ -1524,7 +1599,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
-        result.Body.Add(GenerateClimb(climb, lookupName, resumedName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting));
+        result.Body.Add(GenerateClimb(climb, lookupName, resumedName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, prefixStarts));
 
         foreach (var chain in chains)
         {
@@ -1533,13 +1608,13 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (_hasFollowingOperators)
         {
-            result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentHelpers, ctx, cursor));
+            result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentChoices, LookupCall, ctx, cursor));
         }
 
         if (_prefixLevels.Length > 0)
         {
             var idText = id.ToString(CultureInfo.InvariantCulture);
-            result.Body.Add(GeneratePrefixed(climb, lookupName, resumedName, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth));
+            result.Body.Add(GeneratePrefixed(climb, lookupName, resumedName, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth, prefixStarts));
 
             foreach (var level in _prefixLevels)
             {
@@ -1554,7 +1629,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
     // The climb of the levels up to maxLevel. Without operators that can follow an operand, it parses the prefix operators
     // and the operand only, and the lookup isn't generated.
-    private string GenerateClimb(string climb, string lookup, string resumed, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting)
+    private string GenerateClimb(string climb, string lookup, string resumed, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, string?[] prefixStarts)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -1615,7 +1690,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 Line($"    var start = {cursor}.Offset;");
                 Line("    var prefixOperator = -1;");
 
-                foreach (var line in MatchPrefixLines("    ", id, ctx, compacting, "maxLevel", "prefixOperator"))
+                foreach (var line in MatchPrefixLines("    ", id, ctx, compacting, "maxLevel", "prefixOperator", prefixStarts))
                 {
                     Line(line);
                 }
@@ -1647,7 +1722,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line($"        var start = {cursor}.Offset;");
             Line("        var prefixOperator = -1;");
 
-            foreach (var line in MatchPrefixLines("        ", id, ctx, compacting, "maxLevel", "prefixOperator"))
+            foreach (var line in MatchPrefixLines("        ", id, ctx, compacting, "maxLevel", "prefixOperator", prefixStarts))
             {
                 Line(line);
             }
@@ -1803,7 +1878,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return sb.ToString();
     }
 
-    private string GenerateLookup(string lookup, string?[] levelHelpers, Dictionary<Segment, (string? Choice, string? Plain)> segmentHelpers, string ctx, string cursor)
+    // The choices of each segment, whose calls lookupCall returns, null when there is none, see GenerateSource()
+    private string GenerateLookup(string lookup, string?[] levelHelpers, Dictionary<Segment, (LookupChoice? Choice, LookupChoice? Plain)> segmentChoices, Func<LookupChoice?, string?> lookupCall, string ctx, string cursor)
     {
         var sb = new StringBuilder();
 
@@ -1820,11 +1896,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // which parses the operators, and an operator which can be there isn't a failure where it starts. Most operators
         // follow their operand: only the ones after white space restore the failure, which cost
         // ValuedOperatorsBenchmarks.TableGenerated 1.4% on its mixed input otherwise.
-        void Choice(string? helper)
+        void Choice(LookupChoice? choice)
         {
-            if (helper is not null)
+            if (lookupCall(choice) is { } call)
             {
-                Line($"        if ({helper}({ctx}, out next))");
+                Line($"        if ({call})");
                 Line("        {");
                 Line($"            if (next < 0 && {cursor}.Offset != nextPosition)");
                 Line("            {");
@@ -1842,19 +1918,19 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         foreach (var segment in Segments())
         {
-            var (choiceHelper, plainHelper) = segmentHelpers[segment];
+            var (segmentChoice, plainChoice) = segmentChoices[segment];
 
             if (segment.Valued >= 0)
             {
                 // The previous segments returned, so it is the lookup from the level of valued operators
                 Line($"    if (lowest <= {Text(segment.Valued)})");
                 Line("    {");
-                Choice(choiceHelper);
+                Choice(segmentChoice);
                 Line("    }");
             }
             else
             {
-                plainHelper = choiceHelper;
+                plainChoice = segmentChoice;
             }
 
             // The levels before the first one without valued operators are prefix levels
@@ -1864,7 +1940,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 Line($"    if (lowest <= {Text(plainStart)})");
                 Line("    {");
-                Choice(plainHelper);
+                Choice(plainChoice);
                 Line("    }");
             }
 
@@ -1888,10 +1964,22 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
     // Sets target, which is -1, to the index of an operator of the prefix levels up to maxLevel which reads some text, or
     // leaves it at -1. A constant maxLevel is compared when the code is generated.
-    private List<string> MatchPrefixLines(string indent, string id, string ctx, bool compacting, string maxLevel, string target)
+    // The operators are only tried when one of them can start at the cursor, which the test of prefixStarts of the loosest
+    // level tried tells, see OperatorStart. A test is null when the operators can start with any char, or when the input is
+    // a reader, whose operators are pinned.
+    private List<string> MatchPrefixLines(string indent, string id, string ctx, bool compacting, string maxLevel, string target, string?[] prefixStarts)
     {
         var lines = new List<string>();
         var constant = int.TryParse(maxLevel, NumberStyles.None, CultureInfo.InvariantCulture, out var max);
+        var outer = indent;
+        var prefixStart = PrefixStartTest(prefixStarts, maxLevel, constant, max);
+
+        if (prefixStart is not null)
+        {
+            lines.Add($"{outer}if ({prefixStart})");
+            lines.Add($"{outer}{{");
+            indent += "    ";
+        }
 
         if (compacting)
         {
@@ -1917,11 +2005,49 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             lines.Add($"{indent}{ctx}.Unpin({target}Pin);");
         }
 
+        if (prefixStart is not null)
+        {
+            lines.Add($"{outer}}}");
+        }
+
         return lines;
     }
 
+    // The expression testing whether an operator of the prefix levels up to maxLevel can start at the cursor, with the test of
+    // the loosest of these levels, or null when none is needed
+    private string? PrefixStartTest(string?[] prefixStarts, string maxLevel, bool constant, int max)
+    {
+        if (Array.TrueForAll(prefixStarts, static test => test is null))
+        {
+            return null;
+        }
+
+        if (constant)
+        {
+            var top = _prefixLevels.Length - 1;
+
+            while (top >= 0 && _prefixLevels[top] > max)
+            {
+                top--;
+            }
+
+            return top >= 0 ? prefixStarts[top] : null;
+        }
+
+        // From the loosest level: no operator is tried below the tightest one
+        var expression = "false";
+
+        for (var i = 0; i < _prefixLevels.Length; i++)
+        {
+            var test = prefixStarts[i] ?? "true";
+            expression = $"{maxLevel} >= {_prefixLevels[i].ToString(CultureInfo.InvariantCulture)} ? {test} : {expression}";
+        }
+
+        return expression;
+    }
+
     // The prefix operators following the first one, then their operand, applied from the last operator like at runtime
-    private string GeneratePrefixed(string climb, string lookup, string resumed, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, int maxRecursionDepth)
+    private string GeneratePrefixed(string climb, string lookup, string resumed, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, int maxRecursionDepth, string?[] prefixStarts)
     {
         var sb = new StringBuilder();
         var limitRecursion = maxRecursionDepth > 0;
@@ -1946,7 +2072,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             Line($"{indent}{assignment} = -1;");
 
-            foreach (var line in MatchPrefixLines(indent, id, ctx, compacting, level, target))
+            foreach (var line in MatchPrefixLines(indent, id, ctx, compacting, level, target, prefixStarts))
             {
                 Line(line);
             }

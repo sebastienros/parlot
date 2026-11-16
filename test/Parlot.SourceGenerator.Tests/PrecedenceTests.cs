@@ -42,6 +42,10 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseConditionalLastWithContext(TextReader reader, out string value);
     public static partial bool TryParseValuedLevels(string text, out string value);
     public static partial bool TryParseValuedLevels(TextReader reader, out string value);
+    public static partial bool TryParseMixedStart(string text, out string value, out int failureOffset);
+    public static partial bool TryParseMixedStart(TextReader reader, out string value);
+    public static partial bool TryParseLooserPrefix(string text, out string value, out int failureOffset);
+    public static partial bool TryParseLooserPrefix(TextReader reader, out string value);
 }
 
 internal static class PrecedenceAst
@@ -150,6 +154,137 @@ public class PrecedenceTests
             Assert.Equal(Run(right, input), Run(PrecedenceGrammars.TryParseTightestRight, input));
             Assert.Equal(Run(valued, input), Run(PrecedenceGrammars.TryParseTightestValued, input));
         }
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("a + b")]
+    [InlineData("a -b")]
+    [InlineData("a - b")]
+    [InlineData("a- b")]
+    [InlineData("-a")]
+    [InlineData("- a")]
+    [InlineData("typeof a")]
+    [InlineData("  typeof -a")]
+    [InlineData("! !a.b")]
+    [InlineData("a * b")]
+    [InlineData("a*b")]
+    [InlineData("a .b < c && d")]
+    [InlineData("a , b")]
+    [InlineData("a   ")]
+    [InlineData("a  +  ")]
+    [InlineData("  ")]
+    [InlineData("(a + b")]
+    [InlineData("a\n+\nb")]
+    public void Generated_Table_Testing_The_First_Chars_Of_Its_Operators_Parses_Like_The_Runtime(string input)
+    {
+        AssertMixedStart(RuntimeMixedStart(), input);
+    }
+
+    [Fact]
+    public void Generated_Table_Testing_The_First_Chars_Of_Its_Operators_Parses_Random_Expressions_Like_The_Runtime()
+    {
+        var runtime = RuntimeMixedStart();
+        string[] tokens = ["a", "b", "1", "-", "+", "*", "/", "**", "!", "typeof", ".", "<", "&&", "(", ")", ",", " ", " ", "  ", "\n"];
+        var random = new Random(580);
+        var sb = new StringBuilder();
+
+        for (var i = 0; i < 3000; i++)
+        {
+            sb.Clear();
+
+            for (var j = random.Next(1, 12); j > 0; j--)
+            {
+                sb.Append(tokens[random.Next(tokens.Length)]);
+            }
+
+            AssertMixedStart(runtime, sb.ToString());
+        }
+    }
+
+    [Theory]
+    [InlineData("-  ")]
+    [InlineData("a*  b")]
+    [InlineData("-  a")]
+    [InlineData("  a")]
+    [InlineData("typeof  -a*-b")]
+    [InlineData("a*typeof b")]
+    public void Generated_Table_Only_Tests_The_Prefix_Levels_Which_Are_Tried(string input)
+    {
+        var runtime = Literals.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Eof();
+
+        AssertLikeTheRuntime(runtime, PrecedenceGrammars.TryParseLooserPrefix, PrecedenceGrammars.TryParseLooserPrefix, input);
+    }
+
+    // The runtime table of PrecedenceGrammars.BuildMixedStart
+    internal static Parser<string> RuntimeMixedStart()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()).Then(static x => x.ToString()), static (string x, string name) => PrecedenceAst.Member(x, name)))
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Unary((Terms.Char('!').Then(static (_, start, _, _) => start), static (string x, int start) => $"(!@{start}{x})"))
+            .RightAssociative((Terms.Text("**"), static (a, b) => PrecedenceAst.Binary("**", a, b)))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)), (Terms.Char('/'), static (a, b) => PrecedenceAst.Binary("/", a, b)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .LeftAssociative([Terms.Text("<")], static (string a, string b, string op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Text("&&"), static (a, b) => PrecedenceAst.Binary("&&", a, b)));
+
+        return expression.Eof();
+    }
+
+    // The values, and where the parses fail, are the ones of the runtime, from a string and from a reader
+    private static void AssertMixedStart(Parser<string> runtime, string input) =>
+        AssertLikeTheRuntime(runtime, PrecedenceGrammars.TryParseMixedStart, PrecedenceGrammars.TryParseMixedStart, input);
+
+    internal delegate bool FailureParser(string text, out string value, out int failureOffset);
+
+    private static void AssertLikeTheRuntime(Parser<string> runtime, FailureParser generated, ReaderParser reader, string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var expected = runtime.TryParse(context, out var expectedValue, out _);
+
+        Assert.Equal(expected, generated(input, out var value, out var failure));
+
+        if (expected)
+        {
+            Assert.Equal(expectedValue, value);
+        }
+        else
+        {
+            Assert.Equal(context.Scanner.Cursor.FurthestOffset, failure);
+        }
+
+        Assert.Equal(Run(runtime, input), Run(reader, input, 1));
+    }
+
+    [Theory]
+    // The first-char tests of Operators(): patterns need C# 9, an unknown version gets the comparisons
+    [InlineData(0, false)]
+    [InlineData(8, false)]
+    [InlineData(10, true)]
+    public void Generated_First_Char_Tests_Follow_The_Language_Version(int version, bool patterns)
+    {
+        var context = new Parlot.SourceGeneration.SourceGenerationContext("context", "Test", targetFramework: null, csharpLanguageMajorVersion: version);
+        var parser = Terms.Integer().Operators()
+            .Unary((Terms.Char('-'), static x => -x), (Terms.Char('~'), static x => ~x))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => a + b), (Terms.Char('-'), static (a, b) => a - b));
+        var body = string.Join("\n", Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(parser).GenerateSource(context).Body);
+
+        // The test of the prefix operators, and of the operators after an operand
+        Assert.Equal(patterns, body.Contains("or ' ' or '-' or '~')", StringComparison.Ordinal));
+        Assert.Equal(patterns, body.Contains("or ' ' or '+' or '-')", StringComparison.Ordinal));
+        Assert.Equal(!patterns, body.Contains(".Current == '-' || cursor.Current == '~')", StringComparison.Ordinal));
+        Assert.Equal(!patterns, body.Contains(".Current == '+' || cursor.Current == '-')", StringComparison.Ordinal));
+        Assert.Contains(".MaySkipWhiteSpace(", body, StringComparison.Ordinal);
     }
 
     [Fact]

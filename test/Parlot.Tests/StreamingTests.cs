@@ -40,6 +40,10 @@ public class StreamingTests
         // Operators are read again by the looser levels when they are not followed by an operand
         ["operators"] = new Grammar<string>(CreateOperators()),
         ["operators-eof"] = new Grammar<string>(CreateOperators().Eof()),
+        // The first chars of the operators are tested before their choices are invoked, after the white space for the ones
+        // which skip it, and for the levels which are tried only
+        ["operators-start"] = new Grammar<string>(CreateOperatorsStart()),
+        ["operators-start-eof"] = new Grammar<string>(CreateOperatorsStart().Eof()),
         // A chain of operator levels is parsed by a single precedence parser
         ["operator-levels"] = new Grammar<string>(CreateOperatorLevels()),
         // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
@@ -405,6 +409,15 @@ public class StreamingTests
         Add("operators", operators);
         Add("operators-eof", operators);
         Add("operator-levels", operators);
+        Add("operators-start",
+        [
+            "", "a", "-a", "- a", "--a", "a*b", "a * b", "a*-b", "a*  b", "typeofa", "typeof a", "  typeof -a", "typeof",
+            "typeof ", "a + b", "a+typeof b", "a  ", "-  ", "a*", "a*typeofb", "typeoftypeof a",
+        ]);
+        Add("operators-start-eof",
+        [
+            "", "a", "-a", "a*b", "a * b", "a*  b", "typeofa", "  typeof -a", "typeof ", "a + b", "a+typeof b", "a  ", "-  ",
+        ]);
 
         string[] valuedOperators =
         [
@@ -1901,6 +1914,14 @@ public class StreamingTests
 
         return expression;
     }
+
+    // Operands and operators which don't skip the white space, next to ones which do, and a looser prefix level which does
+    private static Parser<string> CreateOperatorsStart() =>
+        Literals.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Literals.Char('-'), static x => $"(-{x})"))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => $"({a}*{b})"))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => $"({a}+{b})"))
+            .Unary((Terms.Text("typeof"), static x => $"(typeof {x})"));
 
     private static Parser<string> CreateValuedPrefix()
     {

@@ -104,7 +104,8 @@ internal sealed class SeekGuard
 
     private static bool IsGeneric(object parser, Type definition) => parser.GetType() is { IsGenericType: true } type && type.GetGenericTypeDefinition() == definition;
 
-    private static (char[] ExpectedChars, bool SkipWhitespace)? SeekableHintsOf(object parser)
+    // The hints of a parser, or null when it can start with any char. Also read by OperatorStart.
+    internal static (char[] ExpectedChars, bool SkipWhitespace)? SeekableHintsOf(object parser)
     {
         var (canSeek, expectedChars, skipWhitespace) = SeekableHints.Of(parser);
 
@@ -185,6 +186,11 @@ internal sealed class SeekGuard
             return result;
         }).MethodName;
     }
+
+    // A C# expression testing whether variable, a char, is one of chars, OneOf<T>.NonAsciiSeekableChar standing for all the
+    // chars above ASCII. Also emitted by OperatorStart.
+    internal static string GenerateTest(SourceGenerationContext context, string variable, char[] chars) =>
+        GenerateTest(context, variable, ToRanges(chars));
 
     private static string GenerateTest(SourceGenerationContext context, string variable, List<(char First, char Last)> ranges)
     {

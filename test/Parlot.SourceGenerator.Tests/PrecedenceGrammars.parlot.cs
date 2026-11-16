@@ -297,6 +297,39 @@ public static partial class PrecedenceGrammars
                 (ZeroOrMany(Literals.Char('-')).Then(static x => x.Count), static (string x, int count) => $"-{count}({x})"),
                 (Literals.Char('+').Then(static (_, start, _, _) => start), static (string x, int start) => $"+@{start}({x})")));
 
+    // Prefix levels whose operators skip the white space next to ones whose operators don't, a valued one, and operators
+    // after the operands, which the climb tests the first chars of before invoking them. Compared with the runtime,
+    // failures included, in PrecedenceTests.
+    [GenerateParser(nameof(TryParseMixedStart))]
+    private static Parser<string> BuildMixedStart()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()).Then(static x => x.ToString()), static (string x, string name) => PrecedenceAst.Member(x, name)))
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Unary((Terms.Char('!').Then(static (_, start, _, _) => start), static (string x, int start) => $"(!@{start}{x})"))
+            .RightAssociative((Terms.Text("**"), static (a, b) => PrecedenceAst.Binary("**", a, b)))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)), (Terms.Char('/'), static (a, b) => PrecedenceAst.Binary("/", a, b)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .LeftAssociative([Terms.Text("<")], static (string a, string b, string op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Text("&&"), static (a, b) => PrecedenceAst.Binary("&&", a, b)));
+
+        return expression.Eof();
+    }
+
+    // A looser prefix level whose operators skip the white space, which isn't tried for the operands of the binary operators
+    [GenerateParser(nameof(TryParseLooserPrefix))]
+    private static Parser<string> BuildLooserPrefix() =>
+        Literals.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Eof();
+
     private static Parser<string> WithRest(Parser<string> parser) =>
         parser.And(Literals.Pattern(static _ => true, minSize: 0)).Then(static x => x.Item1 + " | " + x.Item2.ToString());
 }
