@@ -412,12 +412,15 @@ public class ValuedOperatorsTests
     }
 
     [Theory]
-    // No choice is invoked after an operand which no operator follows: at the end, or before ), ] and :
+    // No choice is invoked after an operand which no operator follows: at the end, or before ] and a ) or : which follow
+    // it, rather than white space which the operators skip
     [InlineData("a", 0)]
-    [InlineData("a )", 0)]
+    [InlineData("a )", 1)]
+    [InlineData("a)", 0)]
     [InlineData("a || b", 1)]
     [InlineData("a[b] || c", 2)]
-    [InlineData("a ? b : c", 1)]
+    [InlineData("a ? b : c", 2)]
+    [InlineData("a ? b: c", 1)]
     // The ** level is probed, then the * is looked up from the next level, and the conditional is probed before the ??
     [InlineData("a * b", 2)]
     [InlineData("a ?? b", 2)]

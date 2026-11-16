@@ -9,11 +9,12 @@ namespace Parlot.Fluent;
 /// <summary>
 /// The chars the operators of some choices of a <see cref="PrecedenceParser{T}"/> can start with, which it tests before
 /// invoking them: most operands have no prefix operator, and most are followed by a char no operator starts with, where
-/// the choices would fail without reading anything but the white space.
+/// the choices would fail without reading anything.
 /// </summary>
 /// <remarks>
 /// The chars are the <see cref="ISeekable"/> hints of the choices, the keys of their lookup tables, read once they are
-/// resolved: the char at the cursor for the choices which don't skip the white space, the char after it for the others.
+/// resolved: the char at the cursor for the choices which don't skip the white space, the char after it for the others,
+/// which are invoked when there is white space to skip.
 /// </remarks>
 internal sealed class OperatorStart
 {
@@ -100,43 +101,21 @@ internal sealed class OperatorStart
 
     /// <summary>
     /// Whether an operator of the choices can start at the cursor, which stays where it is. When none can, the choices would
-    /// fail without reading anything but the white space, and where they would fail is recorded.
+    /// fail without reading anything, and would record no failure.
     /// </summary>
     /// <remarks>
-    /// The choices are always invoked when the input is a reader, whose buffer the white space would be pinned in, or when
-    /// the diagnostics are collected.
+    /// The choices which skip the white space are invoked when there is some to skip: reading the char after it, and moving
+    /// back, cost more than they do (<c>ValuedLevelsBenchmarks</c> 9-19% on its input of spaced operators). They are always
+    /// invoked when the input is a reader or when the diagnostics are collected.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MayStart(ParseContext context)
     {
         var current = context.Scanner.Cursor.Current;
 
-        if (_atCursor.Contains(current) || context.IsCompactingOrCollectingDiagnostics)
-        {
-            return true;
-        }
-
-        if (!_skipsWhiteSpace)
-        {
-            return false;
-        }
-
-        return context.MaySkipWhiteSpace(current) ? MayStartAfterWhiteSpace(context) : _afterWhiteSpace.Contains(current);
-    }
-
-    // The choices skip the white space themselves, keeping what its parser records: CharAfterWhiteSpace() would forget it
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private bool MayStartAfterWhiteSpace(ParseContext context)
-    {
-        // The choices skip the white space again from the cache of the context, which doesn't record a failure
-        if (_afterWhiteSpace.Contains(context.CharAfterSkippedWhiteSpace(out var recorded)))
-        {
-            context.Scanner.Cursor.RestoreRecordedFailure(recorded);
-            return true;
-        }
-
-        // The cursor moved back from the end of the white space, where the choices would fail
-        return false;
+        return _atCursor.Contains(current)
+            || context.IsCompactingOrCollectingDiagnostics
+            || (_skipsWhiteSpace && (_afterWhiteSpace.Contains(current) || context.MaySkipWhiteSpace(current)));
     }
 
     /// <summary>
@@ -158,21 +137,9 @@ internal sealed class OperatorStart
             Line($"    if ({Test("operatorChar", _atCursorChars, _atCursorAnyNonAscii)}) return true;");
         }
 
-        if (!_skipsWhiteSpace)
-        {
-            Line("    return false;");
-        }
-        else
-        {
-            var after = Test("operatorChar", _afterWhiteSpaceChars, _afterWhiteSpaceAnyNonAscii);
-            Line($"    if (!{ctx}.MaySkipWhiteSpace(operatorChar)) return {after};");
-
-            // The cursor moved back from the end of the white space, where the choices would fail when none can start there
-            Line($"    operatorChar = {ctx}.CharAfterSkippedWhiteSpace(out var operatorFailure);");
-            Line($"    if (!({after})) return false;");
-            Line($"    {cursor}.RestoreRecordedFailure(operatorFailure);");
-            Line("    return true;");
-        }
+        Line(_skipsWhiteSpace
+            ? $"    return {Test("operatorChar", _afterWhiteSpaceChars, _afterWhiteSpaceAnyNonAscii)} || {ctx}.MaySkipWhiteSpace(operatorChar);"
+            : "    return false;");
 
         sb.Append('}');
         return sb.ToString();

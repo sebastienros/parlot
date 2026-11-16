@@ -210,12 +210,12 @@ table instead looks for the operator following an operand once, through a `OneOf
 operators that can start with the next char are tried, and climbs the levels from there (precedence climbing). The cost
 of an operand doesn't depend on the number of levels.
 
-Before the prefix operators of an operand, and before the operators which can follow it, the table tests the char they
-would start with, at the cursor or after the white space for the operators which skip it, against the chars the
-`ISeekable` hints of its operators list. Most operands have no prefix operator and are followed by `,`, `)` or `;`: none
-of the choices is invoked then, nor reported to `ParseContext.OnEnterParser`. When an operator has no hints, or can
-start with any char, its choices are always invoked, as they are for a `TextReader` and when the diagnostics are
-collected.
+Before the prefix operators of an operand, and before the operators which can follow it, the table tests the char at the
+cursor against the chars the `ISeekable` hints of its operators list. Most operands have no prefix operator and are
+followed by `,`, `)` or `;`: none of the choices is invoked then, nor reported to `ParseContext.OnEnterParser`. The
+operators which skip the white space are tried when there is some, as reading past it to test the char costs about what
+they do. When an operator has no hints, or can start with any char, its choices are always invoked, as they are for a
+`TextReader` and when the diagnostics are collected.
 
 - Within a level the first operator that matches applies, even when a later one would match more text, as in the chain.
 - An operator that is not followed by an operand is not read, and the looser levels try their operators at its position:
