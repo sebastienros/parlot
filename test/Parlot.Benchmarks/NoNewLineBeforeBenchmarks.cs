@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
 using System;
 using System.Linq;
@@ -10,7 +11,7 @@ namespace Parlot.Benchmarks;
 // operators and arrows. Before #551 such a choice had no lookup table and tried its alternatives in order; it now selects
 // them with the char after the white space. The Plain rows are the same grammars without NoNewLineBefore.
 
-[MemoryDiagnoser, ShortRunJob]
+[MemoryDiagnoser, ShortRunJob, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), CategoriesColumn]
 public class NoNewLineBeforeBenchmarks
 {
     // 200 expressions of 6 operands, with postfix operators and binary operators which start with the same chars
