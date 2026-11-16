@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// above ASCII.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
-public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
     private readonly TextLiteral _textLiteral;
@@ -183,6 +183,9 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_textLiteral);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => Text.Length == 0;
+
+    // It reads its text and the char after it only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {

@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// can select the operator and the factory to apply with it.
 /// </summary>
 /// <typeparam name="T">The type of the operator parser.</typeparam>
-internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     private readonly Parser<T> _parser;
     private readonly int _index;
@@ -32,6 +32,9 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISource
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<int> result)
     {
