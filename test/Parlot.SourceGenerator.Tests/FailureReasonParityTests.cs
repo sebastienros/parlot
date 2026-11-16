@@ -191,6 +191,12 @@ public class FailureReasonParityTests
         Assert.Contains("((global::Parlot.SourceGenerator.Tests.FailureFlags)(3))", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
         Assert.Contains("RecordRejected(", body, StringComparison.Ordinal);
 
+        // A char and a bool are constants too
+        context = new Parlot.SourceGeneration.SourceGenerationContext();
+        ((Parlot.SourceGeneration.ISourceable)Not(Not(Terms.Char('a'), 'x'), true)).GenerateSource(context);
+        Assert.Contains("('x')", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
+        Assert.Contains("(true)", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
+
         var text = string.Join("\n", ((Parlot.SourceGeneration.ISourceable)Literals.Text("from").When(static (_, _) => true, "a \"reason\"")).GenerateSource(new Parlot.SourceGeneration.SourceGenerationContext()).Body);
         Assert.Contains("\"a \\\"reason\\\"\"", text, StringComparison.Ordinal);
     }

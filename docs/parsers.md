@@ -108,8 +108,8 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
 ```
 
 - The reason is a constant, like a message or an `enum` value boxed once in a static field, so that a rejection allocates
-  nothing. A source-generated parser takes a `string`, an `enum` value or an integer, which it boxes in a static field
-  of its own: compare reasons with `Equals`, not by reference.
+  nothing. A source-generated parser takes a `string`, an `enum` value, an integer, a `bool` or a `char`, which it holds
+  in a literal or a static field of its own: compare reasons with `Equals`, not by reference.
 - A conversion which rejects values for different reasons records its own with
   `context.Scanner.Cursor.RecordFailure(offset, reason)` before it returns `false`, at the start of the value (the
   `start` argument of a `ThenTry` callback) or of the part of it which is wrong, like the digit `8` of an octal number.
@@ -117,7 +117,9 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
   which reads that white space, like a `Capture`, passes a `start` before it, where a reason would be hidden.
   `ParseError.Reason` holds the reason, `TryParse(text, out value)` doesn't build the error.
 - A further failure without a reason hides it: the reason is reported only while it is at `FurthestOffset`.
-- The first reason recorded at an offset is kept: the alternatives which are tried first are the more specific ones.
+- The first reason recorded at an offset is kept: the alternatives which are tried first are the more specific ones. It
+  is kept over the reason of a parser around them too, like a `When` rejecting at the same offset the value of a choice
+  whose first alternative was rejected there with a reason: give the reasons to one of them.
 - A lookahead (`Not`, `WhenFollowedBy`, `Peek`, `WhenNotFollowedBy`) forgets a reason its parser recorded further than
   the failure recorded before it, like it forgets that failure. The cursor keeps a single reason, so that nothing is
   saved when a lookahead starts: a reason its parser recorded where that failure already was is kept, and a reason

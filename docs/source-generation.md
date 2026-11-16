@@ -357,8 +357,8 @@ the reason a `When(predicate, reason)`, `ThenTry(conversion, reason)`, `Not(pars
 `WhenNotFollowedBy(lookahead, reason)` recorded at the furthest failure, or a conversion with
 `context.Scanner.Cursor.RecordFailure(offset, reason)`, like the runtime `ParseError.Reason` (see
 [Why it failed there](parsers.md#why-it-failed-there)), and `null` when there is none, for an `Error` or an `ElseError`
-too. A reason is a `string`, an `enum` value or an integer, which the generated code holds in a static field: recording
-it allocates nothing.
+too. A reason is a `string`, which the generated code writes as a literal, or an `enum` value, an integer, a `bool` or a
+`char`, which it holds boxed in a static field: recording it allocates nothing.
 
 ```csharp
 public static partial bool TryParse(string input, out MyValue value, out (int Offset, int Line, int Column, object? Reason) failure);

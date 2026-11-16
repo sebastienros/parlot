@@ -1916,7 +1916,7 @@ public class StreamingTests
 
         public async Task<string> ParseAsync(Func<TextReader> reader, StreamParseOptions options)
         {
-            // The context of the parse, whose cursor reports the reason of a failure
+            // The context of the parse, whose cursor reports the reason of a failure. Every option is copied.
             ParseContext? context = null;
             var factory = options.ContextFactory;
             var capturing = new StreamParseOptions
@@ -1969,13 +1969,13 @@ public class StreamingTests
 
             // A failure without an exception has an error when it has a reason
             Assert.True(error is null || error.Reason is not null);
-            return error is null ? "FAIL" : $"FAIL {Dump(error.Reason)} at {error.Position.Offset}";
+            return error is null ? "FAIL" : $"FAIL {Dump(error.Reason)} at {error.Position.Offset}{error.Position}";
         }
 
         private static string Error(ParseException e) => $"ERROR {e.Message} at {e.Position.Offset}{e.Position}";
 
         // The reason recorded at the furthest failure, if any
-        private static string Reason(Cursor cursor) => cursor.FurthestReason is { } reason ? $" {Dump(reason)} at {cursor.FurthestOffset}" : "";
+        private static string Reason(Cursor cursor) => cursor.FurthestReason is { } reason ? $" {Dump(reason)} at {cursor.FurthestOffset}{cursor.FurthestPosition}" : "";
     }
 
     private static string Dump(object? value, int depth = 0)
