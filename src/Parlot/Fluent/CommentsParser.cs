@@ -168,9 +168,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
             {
                 // The white space without new lines first: what is skipped after it starts with a new line
                 scanner.SkipWhiteSpace(context.WhiteSpaceMask);
-                var spaces = cursor.Offset;
-                scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
-                lineStart = cursor.Offset != spaces;
+                lineStart = scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
             }
             else
             {
@@ -179,9 +177,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 // The new lines are not white space when UseNewLines is set
                 if (!context.UseNewLines)
                 {
-                    var spaces = cursor.Offset;
-                    scanner.SkipChars(in _spacesOrNewLines);
-                    lineStart = cursor.Offset != spaces;
+                    lineStart = scanner.SkipChars(in _spacesOrNewLines);
                 }
             }
 
@@ -364,14 +360,10 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
             result.Body.Add("    {");
 
             // The white space without new lines first: what is skipped after it starts with a new line
-            var spacesName = $"spaces{context.NextNumber()}";
-
             if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
             {
                 result.Body.Add($"        {scannerName}.SkipWhiteSpace({ctx}.WhiteSpaceMask);");
-                result.Body.Add($"        var {spacesName} = {cursorName}.Offset;");
-                result.Body.Add($"        {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);");
-                result.Body.Add($"        {lineStartName} = {cursorName}.Offset != {spacesName};");
+                result.Body.Add($"        {lineStartName} = {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);");
             }
             else
             {
@@ -381,11 +373,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 {
                     // The new lines are not white space when UseNewLines is set
                     result.Body.Add($"        if (!{ctx}.UseNewLines)");
-                    result.Body.Add("        {");
-                    result.Body.Add($"            var {spacesName} = {cursorName}.Offset;");
-                    result.Body.Add($"            {scannerName}.SkipChars(in {context.GetCharSetField(_spaceOrNewLineChars)});");
-                    result.Body.Add($"            {lineStartName} = {cursorName}.Offset != {spacesName};");
-                    result.Body.Add("        }");
+                    result.Body.Add($"            {lineStartName} = {scannerName}.SkipChars(in {context.GetCharSetField(_spaceOrNewLineChars)});");
                 }
             }
 
