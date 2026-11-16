@@ -27,6 +27,21 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
+    /// <summary>
+    /// Creates a parser failing when <paramref name="action"/> rejects the value of <paramref name="parser"/>, which records
+    /// <paramref name="reason"/> with the failure, see <see cref="Cursor.FurthestReason"/>.
+    /// </summary>
+    /// <param name="parser">The parser reading the value.</param>
+    /// <param name="action">Whether the value is accepted.</param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    public When(Parser<T> parser, Func<ParseContext, T, bool> action, object reason) : this(parser, action)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    // Recorded with the failure of a rejected value, null when there is none
+    private readonly object? _reason;
+
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
 
@@ -74,11 +89,11 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
             {
                 cursor.ResetPosition(start);
                 cursor.RestoreRecordedFailure(recorded);
-                cursor.RecordFailure(valueStart);
+                cursor.RecordFailure(valueStart, _reason);
             }
             else
             {
-                context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+                context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true }, _reason);
                 cursor.ResetPosition(start);
             }
 
@@ -174,6 +189,9 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
             }
         }
 
+        // A reason is a constant, recorded with the failure
+        var reason = context.ReasonArgument(_reason);
+
         var innerValueName = $"innerValue{context.NextNumber()}";
         var recordedName = $"recorded{context.NextNumber()}";
         // Written here rather than with ParseContext.RecordRejected(): the call takes 1.2 ns more for each rejected value
@@ -202,11 +220,11 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
             result.Body.Add($"            {valueStartName} = {cursorName}.Offset;");
             result.Body.Add($"            {cursorName}.ResetPosition({startName});");
             result.Body.Add("        }");
-            result.Body.Add($"        {cursorName}.RecordFailure({valueStartName});");
+            result.Body.Add($"        {cursorName}.RecordFailure({valueStartName}{reason});");
         }
         else
         {
-            result.Body.Add($"        {cursorName}.RecordFailure({(skipsWhiteSpace ? valueStartName : startName)});");
+            result.Body.Add($"        {cursorName}.RecordFailure({(skipsWhiteSpace ? valueStartName : startName)}{reason});");
         }
         result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");

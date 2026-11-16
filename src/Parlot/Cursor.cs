@@ -34,6 +34,12 @@ public class Cursor
     // The furthest absolute offset the cursor was moved back from, see FurthestOffset
     private int _furthestOffset;
 
+    // The reason recorded with a failure, and the offset it was recorded at (-1 when there is none), see FurthestReason.
+    // Only the failure paths which have a reason write them: the hot ResetPositionNotInlined doesn't, a further failure
+    // without a reason hides this one since it is only reported when it is still at the furthest offset.
+    private object? _reason;
+    private int _reasonOffset = -1;
+
     // HitEndFlag is set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
     // IsFinal shares the byte so that the cursor, which is allocated for each parse, doesn't grow.
     private byte _flags;
@@ -589,6 +595,46 @@ public class Cursor
     public void ResetFurthestOffset()
     {
         _furthestOffset = _offset + _base;
+        _reason = null;
+        _reasonOffset = -1;
+    }
+
+    /// <summary>
+    /// The reason recorded with <see cref="RecordFailure(int, object)"/> at <see cref="FurthestOffset"/>, or
+    /// <see langword="null"/> when the furthest failure was recorded without one.
+    /// </summary>
+    /// <remarks>
+    /// A parser which rejects what it read, like <c>When(predicate, reason)</c>, records why, and the reason is reported
+    /// when the parse failed there: a further failure without a reason hides it. It is meaningful after a failed parse, like
+    /// <see cref="FurthestOffset"/>, and <c>TryParse(..., out ParseError error)</c> reports it in <see cref="ParseError.Reason"/>.
+    /// </remarks>
+    public object? FurthestReason => _reasonOffset == FurthestOffset ? _reason : null;
+
+    /// <summary>
+    /// Records a failure at an absolute offset, with why: <paramref name="reason"/> is <see cref="FurthestReason"/> while
+    /// <paramref name="offset"/> is <see cref="FurthestOffset"/>.
+    /// </summary>
+    /// <param name="offset">The absolute offset of what is rejected, usually where a value starts.</param>
+    /// <param name="reason">
+    /// Why, like a message or an <see langword="enum"/> value. A constant, such that a rejection allocates nothing. The first
+    /// reason recorded at an offset is kept: the alternatives which are tried first are the more specific ones.
+    /// <see langword="null"/> records the offset only.
+    /// </param>
+    /// <remarks>
+    /// Call it from the callback of a parser which rejects a value, like <c>ThenTry</c>, before it returns
+    /// <see langword="false"/>, with the start of the value (the <c>start</c> argument of the callback) or of the part of it
+    /// which is wrong. Call it on failure paths only.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void RecordFailure(int offset, object? reason)
+    {
+        RecordFailure(offset);
+
+        if (reason is not null && offset > _reasonOffset)
+        {
+            _reason = reason;
+            _reasonOffset = offset;
+        }
     }
 
     /// <summary>
@@ -606,6 +652,30 @@ public class Cursor
     internal void RestoreRecordedFailure(int recordedFailure)
     {
         _furthestOffset = recordedFailure;
+
+        // A reason recorded since is forgotten too, so that a later failure at its offset doesn't bring it back
+        if (_reasonOffset > recordedFailure)
+        {
+            _reason = null;
+            _reasonOffset = -1;
+        }
+    }
+
+    /// <summary>
+    /// The reason recorded so far and its offset, for <see cref="RestoreRecordedReason(object?, int)"/>.
+    /// </summary>
+    internal object? RecordedReason => _reason;
+
+    internal int RecordedReasonOffset => _reasonOffset;
+
+    /// <summary>
+    /// Restores the reason read from <see cref="RecordedReason"/> and <see cref="RecordedReasonOffset"/>, after
+    /// <see cref="RestoreRecordedFailure(int)"/>: what is read again from where the reason was read records its own.
+    /// </summary>
+    internal void RestoreRecordedReason(object? reason, int reasonOffset)
+    {
+        _reason = reason;
+        _reasonOffset = reasonOffset;
     }
 
     /// <summary>
