@@ -50,6 +50,34 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         _convert = conversion ?? throw new ArgumentNullException(nameof(conversion));
     }
 
+    /// <summary>
+    /// Creates a parser converting the value of <paramref name="parser"/> with <paramref name="conversion"/>, failing when
+    /// it returns <see langword="false"/> with <paramref name="reason"/>, see <see cref="Cursor.FurthestReason"/>.
+    /// </summary>
+    /// <param name="parser">The parser reading the value.</param>
+    /// <param name="conversion">Converts the value, or rejects it.</param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    public ThenTry(Parser<T> parser, TryConvert<T, U> conversion, object reason) : this(parser, conversion)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    /// <summary>
+    /// Creates a parser converting the value of <paramref name="parser"/> with <paramref name="conversion"/>, failing when
+    /// it returns a tuple whose <c>Success</c> is <see langword="false"/> with <paramref name="reason"/>, see
+    /// <see cref="Cursor.FurthestReason"/>.
+    /// </summary>
+    /// <param name="parser">The parser reading the value.</param>
+    /// <param name="conversion">Converts the value, or rejects it.</param>
+    /// <param name="reason">Why a value is rejected: a constant, like a message or an <see langword="enum"/> value.</param>
+    public ThenTry(Parser<T> parser, Func<T, (bool Success, U Value)> conversion, object reason) : this(parser, conversion)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    // Recorded with the failure of a rejected value, null when there is none
+    private readonly object? _reason;
+
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
 
@@ -132,7 +160,7 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
             cursor.ResetPosition(start);
             cursor.RestoreRecordedFailure(recorded);
-            cursor.RecordFailure(valueStart);
+            cursor.RecordFailure(valueStart, _reason);
         }
         else
         {
@@ -199,7 +227,7 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
             }
         }
 
-        cursor.RecordFailure(valueStart);
+        cursor.RecordFailure(valueStart, _reason);
     }
 
     private bool Convert(T value, ref ParseResult<U> result)
@@ -333,7 +361,9 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
             result.Body.Add($"            {cursorName}.ResetPosition({resetName});");
             result.Body.Add("        }");
         }
-        result.Body.Add($"        {cursorName}.RecordFailure({valueStartName});");
+        // A reason is a constant, recorded with the failure
+        var reason = context.ReasonArgument(_reason);
+        result.Body.Add($"        {cursorName}.RecordFailure({valueStartName}{reason});");
         result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");

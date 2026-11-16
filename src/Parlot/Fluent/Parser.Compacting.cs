@@ -45,6 +45,12 @@ public abstract partial class Parser<T>
     /// <returns>Whether the text matched.</returns>
     public bool TryParse(TextReader reader, out T value, out ParseError? error, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
     {
+        return TryParse(reader, out value, out error, options, withReason: true, cancellationToken);
+    }
+
+    // withReason: whether a failure with a reason returns its error, which computes its position
+    private bool TryParse(TextReader reader, out T value, out ParseError? error, StreamParseOptions? options, bool withReason, CancellationToken cancellationToken)
+    {
         ThrowHelper.ThrowIfNull(reader, nameof(reader));
 
         options ??= StreamParseOptions.Default;
@@ -63,6 +69,11 @@ public abstract partial class Parser<T>
             {
                 value = parsed!;
                 return true;
+            }
+
+            if (withReason)
+            {
+                error = ParseError.FromFurthestReason(context);
             }
         }
         catch (ParseException e)
@@ -87,7 +98,7 @@ public abstract partial class Parser<T>
     /// <returns>Whether the text matched.</returns>
     public bool TryParse(TextReader reader, out T value, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
     {
-        return TryParse(reader, out value, out _, options, cancellationToken);
+        return TryParse(reader, out value, out _, options, withReason: false, cancellationToken);
     }
 
     /// <summary>

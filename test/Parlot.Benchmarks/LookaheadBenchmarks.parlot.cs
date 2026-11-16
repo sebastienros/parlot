@@ -44,4 +44,9 @@ public partial class LookaheadBenchmarks
     [GenerateParser(nameof(TryParseWhen))]
     private static Parser<string> BuildWhen() =>
         Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f').Then(static value => "");
+
+    // The same condition, which records a reason with the failure
+    [GenerateParser(nameof(TryParseWhenReason))]
+    private static Parser<string> BuildWhenReason() =>
+        Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f', "reserved").Then(static value => "");
 }

@@ -43,12 +43,13 @@ public abstract partial class Parser<T> : IParserText
 
     public bool TryParse(string text, out T? value)
     {
-        return TryParse(text, out value, out _);
+        // The error isn't returned: the one of a reason isn't built
+        return TryParse(new ParseContext(new Scanner(text)), out value!, out _, withReason: false);
     }
 
     public bool TryParse(string text, CancellationToken cancellationToken, out T? value)
     {
-        return TryParse(text, cancellationToken, out value, out _);
+        return TryParse(new ParseContext(new Scanner(text), cancellationToken), out value!, out _, withReason: false);
     }
 
     public bool TryParse(string text, out T value, out ParseError? error)
@@ -62,6 +63,12 @@ public abstract partial class Parser<T> : IParserText
     }
 
     public bool TryParse(ParseContext context, out T value, out ParseError? error)
+    {
+        return TryParse(context, out value, out error, withReason: true);
+    }
+
+    // withReason: whether a failure with a reason returns its error, which computes its position
+    private bool TryParse(ParseContext context, out T value, out ParseError? error, bool withReason)
     {
         error = null;
 
@@ -77,6 +84,11 @@ public abstract partial class Parser<T> : IParserText
             {
                 value = localResult.Value;
                 return true;
+            }
+
+            if (withReason)
+            {
+                error = ParseError.FromFurthestReason(context);
             }
         }
         catch (ParseException e)
