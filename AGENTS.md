@@ -113,6 +113,9 @@ type implements each of these that applies:
   it invokes, like `SkipWhiteSpace` around the `Terms`, also overrides `IsTextWrapper`, to be written each time.
 - A wrapper, a parser that never fails, or one that starts with a fixed text goes in the sets at the top of
   `GrammarAnalysis`.
+- A literal, which only reads the text, implements the internal `IInvokesOnlyLiterals`, and a wrapper which invokes a single
+  parser, reading at most the white space before it, forwards it (`InvokesOnlyLiterals.Of`): a choice invoked before the white
+  space tries two of them in order rather than with its table. A type left out only costs that choice a table lookup.
 - A parser that recurses (`Deferred`) calls the internal `EnsureSufficientStack()` on each entry and counts a level with
   `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the same, counting only when
   `SourceGenerationContext.MaxRecursionDepth` is set. A parser that would repeat itself reads in a loop instead and only

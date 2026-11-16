@@ -182,6 +182,9 @@ public class StreamingTests
         // A choice in a sequence, which doesn't keep the text buffered: the choice keeps the white space it skips
         ["newline-choice-sequence"] = new Grammar<string>(CreateNewLineChoiceSequence()),
         ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // A choice of two composite alternatives in a sequence, selected with its table (#581)
+        ["newline-tail-sequence"] = new Grammar<string>(CreateNewLineTailSequence()),
+        ["newline-tail-sequence-comments"] = new Grammar<string>(CreateNewLineTailSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
@@ -286,6 +289,14 @@ public class StreamingTests
         var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
         var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x);
         return Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+    }
+
+    private static Parser<string> CreateNewLineTailSequence()
+    {
+        // The assignment reads the '=' of an arrow before it fails, and the arrow fails after a new line
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        return Terms.Identifier().And(OneOf(assignment, arrow)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
     }
 
     // A word starts with a lowercase ASCII letter or any char above ASCII, and ends before a space or a parenthesis
@@ -542,6 +553,8 @@ public class StreamingTests
         ];
         Add("newline-choice-sequence", newLineChoiceSequence);
         Add("newline-choice-sequence-comments", newLineChoiceSequence);
+        Add("newline-tail-sequence", newLineChoiceSequence);
+        Add("newline-tail-sequence-comments", newLineChoiceSequence);
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
         Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
         Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");
