@@ -50,6 +50,13 @@ public class Cursor
     // HitEndFlag is set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
     // IsFinal shares the byte so that the cursor, which is allocated for each parse, doesn't grow.
     private byte _flags;
+
+#if !PARLOT_STRING_ONLY
+    // The char before Buffer[0] in the input, -1 at the start of the input, see IsAtLineStart. On 64-bit it takes the
+    // padding of the fields
+    private int _charBeforeBuffer = -1;
+#endif
+
     private const byte HitEndFlag = 1;
     private const byte NotFinalFlag = 2;
 
@@ -747,6 +754,38 @@ public class Cursor
     // The absolute offset of the first char of Buffer, 0 unless the input is streamed in compacting mode
     internal int BufferStart => _base;
 
+    // Whether a line starts at the cursor, for the comments which only start there: at the start of the input, unless the
+    // cursor was created in the middle of a line, or after a new line, one of newLines or of the white space set of whiteSpaceMask when it is null. The char before the buffer is
+    // the one which the compacting buffer dropped, or which is before a window or a delimited text of ParseManyAsync
+    internal bool IsAtLineStart(string? newLines, byte whiteSpaceMask)
+    {
+        int previous;
+
+        if (_offset > 0)
+        {
+            previous = Buffer[_offset - 1];
+        }
+        else
+        {
+#if !PARLOT_STRING_ONLY
+            previous = _charBeforeBuffer;
+
+            if (previous < 0)
+#endif
+            {
+                // The start of the text: a line starts there unless the cursor was created in the middle of one
+                return _originOffset != 0 || _originColumn == 1;
+            }
+        }
+
+        return Character.IsNewLine((char)previous, newLines, whiteSpaceMask);
+    }
+
+#if !PARLOT_STRING_ONLY
+    // Tells the char before Buffer[0] in the input, -1 at the start of the input
+    internal void SetCharBeforeBuffer(int c) => _charBeforeBuffer = c;
+#endif
+
     /// <summary>
     /// Returns the buffered text between the absolute offset <paramref name="start"/> and <c>start + length</c>.
     /// </summary>
@@ -803,6 +842,12 @@ public class Cursor
             _originLine = start.Line;
             _originColumn = start.Column;
             _lines?.MoveOrigin(start);
+        }
+
+        // The char before the new window, which a comment at the start of a line reads
+        if (bufferStart > _base)
+        {
+            _charBeforeBuffer = Buffer[bufferStart - _base - 1];
         }
 
         Buffer = buffer;

@@ -2007,8 +2007,10 @@ parser.Parse("hello /* multiline\n comment\n */ world");
 | `WithWhiteSpace(whiteSpace, newLines)` | the chars of `whiteSpace` and of `newLines`, instead of the context's `WhiteSpaceSet` |
 | `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
 | `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
+| `WithSingleLine(start, lineTerminators, placement)` | the same, starting where `placement` says: anywhere, or at the start of a line only |
 | `WithMultiLine(start, end)` | from `start` to `end` included |
 | `WithMultiLine(start, end, unterminated)` | from `start` to `end` included, and a comment without its end as `unterminated` says |
+| `WithMultiLine(start, end, unterminated, lineTerminators)` | the same, and a comment contains a new line when it contains one of the chars of `lineTerminators` |
 | `WithParser(parser)` | what `parser` matches |
 
 Without white space, only the comments are skipped. The line terminators are not part of a single line comment: they are
@@ -2060,6 +2062,44 @@ var tokens = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1))
 tokens.Parse("a /* b */ c"); // a, c
 tokens.Parse("a /* b");      // a, /, *, b
 ```
+
+#### Comments at the start of a line
+
+`WithSingleLine(start, lineTerminators, CommentPlacement.LineStart)` describes a single line comment which only starts at
+the start of a line: when the white space and comments skipped before it, since the skip started, contain a new line, or
+when the skip started at the start of the input or after a new line. The skip starts a line after:
+
+- a new line of the white space: the new lines of `WithWhiteSpace(whiteSpace, newLines)`, which are not white space when
+  `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then. The
+  new line which ends a single line comment is one of them;
+- a multi line comment containing a new line: one of the chars of `WithMultiLine(start, end, unterminated,
+  lineTerminators)`, or for the other overloads a new line of the white space: one of the chars of `newLines` with
+  `WithWhiteSpace(whiteSpace, newLines)`, which can be none, or of the context's set otherwise.
+
+Elsewhere its start is not a comment, like a start which doesn't match: the cursor stays before it, and the comments added
+after it can start there. JavaScript scripts (ECMAScript Annex B.1.1) have such a comment, `-->`, besides `<!--`, which starts
+one anywhere:
+
+```c#
+var parser = script.WithComments(builder => builder
+    .WithWhiteSpace(whiteSpace, lineTerminators)
+    .WithSingleLine("//", lineTerminators)
+    .WithSingleLine("<!--", lineTerminators)
+    .WithSingleLine("-->", lineTerminators, CommentPlacement.LineStart)
+    .WithMultiLine("/*", "*/", UnterminatedComment.Throw, lineTerminators));
+
+parser.Parse("x = 1 /*\n*/ --> comment"); // x = 1
+parser.Parse("x = a --> b");               // x = a-- > b
+```
+
+A skip which starts after a new line starts a line too: one which a grammar reading the new lines as tokens read, with
+`UseNewLines`, or which `ParseManyAsync` skipped before a value, or the delimiter of a delimited text. The driver skips the
+white space of the context's set between the values, before the value skips its comments: a value after a new line and
+white space, which the driver skipped, doesn't start a line. Set the comments as the `WhiteSpaceParser` of the
+`ContextFactory` for the driver to skip them between the values, as `Parse` does.
+
+The hints of the parser are the same, the first char of the comment among them. Only `CommentsParser` tracks where a line
+starts: `Build()` throws an `InvalidOperationException` when the builder would compose the parsers of its elements instead.
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
 token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the

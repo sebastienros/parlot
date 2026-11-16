@@ -195,6 +195,31 @@ public class CommentsBuilder
     /// <param name="singleLineStart">The text which starts a comment.</param>
     /// <param name="lineTerminators">The chars which end a comment, for instance <c>"\r\n\u2028\u2029"</c> for JavaScript or C#.</param>
     public CommentsBuilder WithSingleLine(string singleLineStart, string lineTerminators)
+        => WithSingleLine(singleLineStart, lineTerminators, CommentPlacement.Anywhere);
+
+    /// <summary>
+    /// Skips single line comments, from <paramref name="singleLineStart"/> to the first of <paramref name="lineTerminators"/>,
+    /// which is not part of the comment, or to the end of the text, which start where <paramref name="placement"/> says.
+    /// </summary>
+    /// <param name="singleLineStart">The text which starts a comment.</param>
+    /// <param name="lineTerminators">The chars which end a comment, for instance <c>"\r\n\u2028\u2029"</c> for JavaScript or C#.</param>
+    /// <param name="placement">Where the comment starts. With <see cref="CommentPlacement.LineStart"/>, it only starts when
+    /// the white space and comments skipped before it contain a new line, or when the skip started at the start of the input or
+    /// after a new line:
+    /// a new line of the white space, like the one which ends a single line comment, or a multi line comment containing a new
+    /// line (see <see cref="WithMultiLine(string, string, UnterminatedComment, string)"/>).</param>
+    /// <remarks>
+    /// <para>
+    /// JavaScript scripts (ECMAScript Annex B.1.1) skip <c>&lt;!--</c> anywhere and <c>--&gt;</c> at the start of a line:
+    /// <c>WithSingleLine("&lt;!--", lineTerminators).WithSingleLine("--&gt;", lineTerminators, CommentPlacement.LineStart)</c>.
+    /// </para>
+    /// <para>
+    /// A comment at the start of a line needs the builder to skip everything in a single <see cref="CommentsParser"/>:
+    /// <see cref="Build"/> throws an <see cref="InvalidOperationException"/> when the builder composes the parsers of its
+    /// elements instead.
+    /// </para>
+    /// </remarks>
+    public CommentsBuilder WithSingleLine(string singleLineStart, string lineTerminators, CommentPlacement placement)
     {
         ThrowHelper.ThrowIfNull(singleLineStart, nameof(singleLineStart));
         ThrowHelper.ThrowIfNull(lineTerminators, nameof(lineTerminators));
@@ -204,8 +229,13 @@ public class CommentsBuilder
             throw new ArgumentException("At least one line terminator is required.", nameof(lineTerminators));
         }
 
+        if (placement is not (CommentPlacement.Anywhere or CommentPlacement.LineStart))
+        {
+            throw new ArgumentOutOfRangeException(nameof(placement));
+        }
+
         _parsers.Add(Capture(Literals.Text(singleLineStart).And(AnyCharBefore(Literals.AnyOf(lineTerminators, maxSize: 1), canBeEmpty: true, failOnEof: false, consumeDelimiter: false))));
-        AddComment(new CommentsParser.CommentSyntax(singleLineStart, end: null, lineTerminators));
+        AddComment(new CommentsParser.CommentSyntax(singleLineStart, end: null, lineTerminators, placement: placement));
         return this;
     }
 
@@ -228,12 +258,48 @@ public class CommentsBuilder
         ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
         ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
 
+        return AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators: null);
+    }
+
+    /// <summary>
+    /// Skips multi line comments, from <paramref name="multiLineStart"/> to <paramref name="multiLineEnd"/> included, which
+    /// contain a new line when they contain one of <paramref name="lineTerminators"/>.
+    /// </summary>
+    /// <param name="multiLineStart">The text which starts a comment.</param>
+    /// <param name="multiLineEnd">The text which ends a comment.</param>
+    /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
+    /// end of the text.</param>
+    /// <param name="lineTerminators">The chars of the new lines a comment can contain, for instance <c>"\n\r\u2028\u2029"</c>
+    /// for JavaScript. A comment of the other overloads contains a new line when it contains one of the new lines of the
+    /// white space: the chars of <c>newLines</c> with <see cref="WithWhiteSpace(string, string)"/>, which can be none, or
+    /// the new lines of the context's <see cref="WhiteSpaceSet"/> otherwise.</param>
+    /// <remarks>
+    /// A comment containing a new line starts a line, where the comments of
+    /// <see cref="WithSingleLine(string, string, CommentPlacement)"/> with <see cref="CommentPlacement.LineStart"/> can start.
+    /// </remarks>
+    public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string lineTerminators)
+    {
+        ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
+        ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
+        ThrowHelper.ThrowIfNull(lineTerminators, nameof(lineTerminators));
+
+        if (lineTerminators.Length == 0)
+        {
+            throw new ArgumentException("At least one line terminator is required.", nameof(lineTerminators));
+        }
+
+        return AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators);
+    }
+
+    // Adds a multi line comment, whose arguments the public overloads checked
+    private CommentsBuilder AddMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string? lineTerminators)
+    {
         if (unterminated is not (UnterminatedComment.Throw or UnterminatedComment.NotAComment or UnterminatedComment.ToEnd))
         {
             throw new ArgumentOutOfRangeException(nameof(unterminated));
         }
 
-        var comment = new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null, unterminated);
+        var comment = new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators, unterminated);
 
         _parsers.Add(ComposedMultiLine(comment));
         AddComment(comment);
@@ -303,10 +369,19 @@ public class CommentsBuilder
     /// Without <see cref="WithParser(Parser{TextSpan})"/> it is a <see cref="CommentsParser"/>, which skips everything in a
     /// single loop. Otherwise it is the choice of the parsers of the elements, in a loop.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The builder has a comment of <see cref="CommentPlacement.LineStart"/>,
+    /// which needs the single loop of <see cref="CommentsParser"/>, and composes the parsers of its elements
+    /// instead.</exception>
     public Parser<TextSpan> Build()
     {
         if (_parsers.Count == 0 || !CanSkipInOneParser())
         {
+            // The composed parsers can't tell where a line starts
+            if (_comments.Exists(static c => c.Placement == CommentPlacement.LineStart))
+            {
+                throw new InvalidOperationException("A comment placed at the start of a line can't be skipped when the builder composes the parsers of its elements: with a parser added with WithParser(), a comment whose start is empty or starts with white space, a multi line comment whose end is empty, or WithWhiteSpace(whiteSpace, newLines) with another white space element.");
+            }
+
             return Capture(OneOrMany(OneOf(_parsers.ToArray())));
         }
 
