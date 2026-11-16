@@ -46,6 +46,18 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData(10)]
+    [InlineData(100)]
+    public void InterpolatedGrammars(int chunkLength)
+    {
+        // Setup checks that the four parsers count the same holes
+        var benchmark = new InterpolatedBenchmarks { ChunkLength = chunkLength };
+        benchmark.Setup();
+        Assert.Equal(InterpolatedBenchmarks.ExpectedHoles, benchmark.RuntimeInterpolated());
+        Assert.Equal(InterpolatedBenchmarks.ExpectedHoles, benchmark.GeneratedInterpolated());
+    }
+
+    [Theory]
     [InlineData("   class a", 7)]
     [InlineData("  @a @b class a", 13)]
     public void SequenceStartGrammars(string input, int length)
