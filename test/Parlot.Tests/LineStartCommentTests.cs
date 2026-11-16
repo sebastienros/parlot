@@ -228,11 +228,11 @@ public class LineStartCommentTests
 
     [Theory]
     [InlineData(1, 1, true)]
-    [InlineData(3, 1, true)]
+    [InlineData(3, 1, false)]
     [InlineData(1, 5, false)]
-    public void ShouldStartALineWhereTheScannerStartsAtColumnOne(int line, int column, bool expected)
+    public void ShouldStartALineWhereTheScannerStartsTheInputOnly(int line, int column, bool expected)
     {
-        // A scanner created at the start of a line, as the windows of ParseManyAsync after a '\n'
+        // A scanner created elsewhere, as the windows and the delimited texts of ParseManyAsync
         var parser = Build(JavaScriptChars);
         var context = new ParseContext(new Scanner("--> a\nb", new TextPosition(0, line, column), isFinal: true));
         ParseResult<TextSpan> result = default;

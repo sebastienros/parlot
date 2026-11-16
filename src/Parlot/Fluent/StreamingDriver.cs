@@ -74,9 +74,7 @@ internal sealed class StreamingDriver : IDisposable
     /// Drops the text before <paramref name="start"/>, reads more text and starts a new window at <paramref name="start"/>.
     /// </summary>
     /// <param name="start">The offset of the text to keep in the current window.</param>
-    /// <param name="startsLine">Whether a line starts at <paramref name="start"/> for the comments which only start there: at
-    /// the start of the input, or after the white space the item reader dropped when it contains a new line.</param>
-    public async ValueTask GrowAsync(int start, bool startsLine)
+    public async ValueTask GrowAsync(int start)
     {
         // The line and column of the new window are the ones of its first char in the current window
         var position = Cursor.GetPosition(start);
@@ -136,7 +134,6 @@ internal sealed class StreamingDriver : IDisposable
         }
 
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);
-        Context.Scanner.Cursor.SetKnownLineStart(startsLine ? 0 : -1);
     }
 
     /// <summary>
@@ -303,25 +300,6 @@ internal sealed class StreamingDriver : IDisposable
         return exception;
     }
 
-    /// <summary>
-    /// Skips the white space before a value, as the context does, and tells the cursor whether a line starts after it, for the
-    /// comments of the value which only start at the start of a line (see <see cref="CommentPlacement.LineStart"/>): when a
-    /// line starts before it, or it contains a new line of the context's set. Not after a <see cref="CommentsParser"/>, which
-    /// skips those comments itself: it stops where no comment starts.
-    /// </summary>
-    public static void SkipWhiteSpaceBeforeValue(ParseContext context)
-    {
-        var cursor = context.Scanner.Cursor;
-        var start = cursor.Offset;
-        var startsLine = cursor.IsAtKnownLineStart;
-        var newLine = context.SkipWhiteSpaceAndFindNewLine(newLines: null);
-
-        if (cursor.Offset != start && (startsLine || newLine) && context.WhiteSpaceParser is not CommentsParser)
-        {
-            cursor.SetKnownLineStart(cursor.Offset);
-        }
-    }
-
     private ParseContext CreateContext(string text, bool isFinal)
     {
         var scanner = new Scanner(text, new TextPosition(0, _line, _column), isFinal);
@@ -379,17 +357,6 @@ internal sealed class StreamingItemReader<T, TSeparator>
     /// </summary>
     public int RetryOffset { get; private set; }
 
-    /// <summary>
-    /// Whether a line starts at <see cref="RetryOffset"/>, see <see cref="StreamingDriver.GrowAsync(int, bool)"/>.
-    /// </summary>
-    public bool RetryStartsLine { get; private set; }
-
-    private void SetRetry(int offset, bool startsLine)
-    {
-        RetryOffset = offset;
-        RetryStartsLine = startsLine;
-    }
-
     public StreamingStep Next(out T value)
     {
         value = default!;
@@ -400,10 +367,6 @@ internal sealed class StreamingItemReader<T, TSeparator>
             var cursor = context.Scanner.Cursor;
             var start = cursor.Offset;
 
-            // A line starts at the start of the window, or after the white space dropped, when the cursor tells it, not
-            // after a value or a separator
-            var startsLine = cursor.IsAtKnownLineStart;
-
             cursor.ResetHitEnd();
 
             if (_skipWhiteSpace)
@@ -411,11 +374,11 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 // A white space parser can throw too, for a comment which the window doesn't end
                 try
                 {
-                    StreamingDriver.SkipWhiteSpaceBeforeValue(context);
+                    context.SkipWhiteSpace();
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
-                    SetRetry(start, startsLine);
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
                 catch (ParseException e)
@@ -429,7 +392,6 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 if (!cursor.HitEnd || context.WhiteSpaceParser is null)
                 {
                     start = cursor.Offset;
-                    startsLine = cursor.IsAtKnownLineStart;
                 }
             }
 
@@ -441,7 +403,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                     return StreamingStep.End;
                 }
 
-                SetRetry(start, startsLine);
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
 
@@ -449,7 +411,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
             {
                 if (cursor.HitEnd)
                 {
-                    SetRetry(start, startsLine);
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
 
@@ -469,7 +431,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
-                    SetRetry(start, startsLine);
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
                 catch (ParseException e)
@@ -479,7 +441,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
 
                 if (cursor.HitEnd)
                 {
-                    SetRetry(start, startsLine);
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
 
@@ -497,7 +459,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
             }
             catch (ParseException) when (cursor.HitEnd)
             {
-                SetRetry(start, startsLine);
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
             catch (ParseException e)
@@ -507,7 +469,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
 
             if (cursor.HitEnd)
             {
-                SetRetry(start, startsLine);
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
 

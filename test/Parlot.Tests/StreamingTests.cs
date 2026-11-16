@@ -756,73 +756,50 @@ public class StreamingTests
     [InlineData("b\n--> c")]
     [InlineData("b --> c")]
     [InlineData("  --> a\n/* b */ --> c\nd")]
-    public async Task ParseManyAsyncStartsALineAtTheStartOfTheInputOnly(string text)
+    [InlineData("a\n  --> b\nc")]
+    [InlineData("a\u2028--> b\n/*\r*/ --> c\nd")]
+    public async Task ParseManyAsyncReadsTheCommentsOfTheContextAsParse(string text)
     {
-        // Each value is parsed in a window of the text, whose start is not the start of a line. The comments are the white
-        // space of the context, which the driver skips between the values
+        // The comments are the white space of the context, which the driver skips between the values: from the end of the
+        // value before, as Parse does
         var builder = new CommentsBuilder();
         LineStartCommentTests.JavaScriptChars(builder);
         var comments = builder.Build();
         var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"));
-        var options = new StreamParseOptions { BufferSize = 1, ContextFactory = (scanner, cancellationToken) => new ParseContext(scanner, cancellationToken) { WhiteSpaceParser = comments } };
-        var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options));
+        var expected = ZeroOrMany(token).Parse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments });
 
-        Assert.Equal(ZeroOrMany(token).Parse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments }), values);
+        // Values in windows of their own, and in the same window
+        foreach (var bufferSize in new[] { 1, 4096 })
+        {
+            var options = new StreamParseOptions { BufferSize = bufferSize, ContextFactory = (scanner, cancellationToken) => new ParseContext(scanner, cancellationToken) { WhiteSpaceParser = comments } };
+            var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options));
+
+            Assert.Equal(expected, values);
+        }
     }
 
     [Theory]
-    [InlineData("a\n--> b\nc", "a|c")]
-    [InlineData("a --> b", "a|--|>|b")]
-    [InlineData("a\n  --> b\nc", "a|c")]
-    [InlineData("a\u2028--> b\nc", "a|c")]
-    [InlineData("a  \n\n  --> b\r--> c\nd --> e", "a|d|--|>|e")]
     [InlineData("--> a\nb", "b")]
-    public async Task ParseManyAsyncStartsALineAfterTheNewLinesItSkips(string text, string expected)
+    [InlineData("a\n--> b", "a|--|>|b")]
+    [InlineData("a --> b", "a|--|>|b")]
+    public async Task ParseManyAsyncStartsALineAtTheStartOfTheInputOnly(string text, string expected)
     {
-        // Without a WhiteSpaceParser, the driver skips the white space of the context's set between the values: the value
-        // starts a line after a new line
+        // Without the comments in the context, the driver skips the white space of its set between the values: a value
+        // starts after it, not at the start of a line, whatever the windows
         var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">")).WithComments(LineStartCommentTests.JavaScriptChars);
-        Assert.Equal(expected, string.Join("|", ZeroOrMany(token).Parse(text)!));
 
-        // Values in windows of their own, and in the same window
         foreach (var bufferSize in new[] { 1, 4096 })
         {
             var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), new StreamParseOptions { BufferSize = bufferSize }));
 
             Assert.Equal(expected, string.Join("|", values));
         }
-    }
 
-    [Fact]
-    public async Task ParseManyAsyncStartsALineInEachDelimitedText()
-    {
-        // Each text after a '\n' starts a line, a text after another delimiter doesn't
+        // Each delimited text starts after a delimiter, the first one at the start of the input
         var tokens = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"))).AndSkip(SkipWhiteSpace(Always())).Then(static x => string.Join("|", x)).WithComments(LineStartCommentTests.JavaScriptChars);
 
-        Assert.Equal(["", "a", "", "b"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x\na\n--> y\nb", () => 1, yield: false), '\n')));
+        Assert.Equal(["", "a", "--|>|y", "b"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x\na\n--> y\nb", () => 1, yield: false), '\n')));
         Assert.Equal(["", "--|>|y"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x;--> y", () => 1, yield: false), ';')));
-
-        // The white space the driver skips before the text, with a new line or after the start of a line
-        Assert.Equal(["", "a"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("  --> x\na", () => 1, yield: false), '\n')));
-        Assert.Equal(["a", "", "--|>|z"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("a;\n--> y; --> z", () => 1, yield: false), ';')));
-    }
-
-    [Theory]
-    [InlineData("a\n--> b\nc", "a|c")]
-    [InlineData("a --> b", "a|--|>|b")]
-    public async Task ParseManyAsyncStartsALineAfterTheWhiteSpaceParser(string text, string expected)
-    {
-        // A white space parser which isn't the comments of the value: the driver tells whether it skipped a new line
-        var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">")).WithComments(LineStartCommentTests.JavaScriptChars);
-        var whiteSpace = Literals.WhiteSpace(includeNewLines: true);
-
-        foreach (var bufferSize in new[] { 1, 4096 })
-        {
-            var options = new StreamParseOptions { BufferSize = bufferSize, ContextFactory = (scanner, cancellationToken) => new ParseContext(scanner, cancellationToken) { WhiteSpaceParser = whiteSpace } };
-            var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options));
-
-            Assert.Equal(expected, string.Join("|", values));
-        }
     }
 
     [Theory]

@@ -37,10 +37,6 @@ public class Cursor
     // HitEndFlag is set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
     // IsFinal shares the byte so that the cursor, which is allocated for each parse, doesn't grow.
     private byte _flags;
-
-    // The absolute offset where a line is known to start, -1 for none, see IsAtKnownLineStart
-    private int _lineStartOffset;
-
     private const byte HitEndFlag = 1;
     private const byte NotFinalFlag = 2;
 
@@ -76,7 +72,6 @@ public class Cursor
         _originOffset = _lastOffset = _furthestOffset = position.Offset;
         _originLine = _lastLine = position.Line;
         _originColumn = _lastColumn = position.Column;
-        _lineStartOffset = position.Column == 1 ? position.Offset : -1;
         Eof = _offset == _textLength;
         _flags = (byte)((isFinal ? 0 : NotFinalFlag) | (Eof ? HitEndFlag : 0));
         Current = Eof ? NullChar : Buffer[_offset];
@@ -270,13 +265,9 @@ public class Cursor
     // The absolute offset of the first char of Buffer, 0 unless the input is streamed in compacting mode
     internal int BufferStart => _base;
 
-    // Whether the cursor is where a line is known to start, for the comments which only start there: where the cursor was
-    // created at column 1, as the start of the input or a delimited text after a '\n', or where the window driver of
-    // ParseManyAsync dropped white space containing a new line
-    internal bool IsAtKnownLineStart => _offset + _base == _lineStartOffset;
-
-    // Tells that a line starts at an absolute offset, or none with -1
-    internal void SetKnownLineStart(int offset) => _lineStartOffset = offset;
+    // Whether the cursor is at the start of the input: offset 0, at line 1 and column 1. Not at the start of a window or a
+    // delimited text of ParseManyAsync, whose offsets start at 0 and whose line and column are the ones of their first char
+    internal bool IsAtInputStart => _offset + _base == 0 && _originOffset == 0 && _originLine == 1 && _originColumn == 1;
 
     /// <summary>
     /// Returns the buffered text between the absolute offset <paramref name="start"/> and <c>start + length</c>.

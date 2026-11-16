@@ -1869,8 +1869,7 @@ tokens.Parse("a /* b");      // a, /, *, b
 
 `WithSingleLine(start, lineTerminators, CommentPlacement.LineStart)` describes a single line comment which only starts at
 the start of a line: when the white space and comments skipped before it, since the skip started, contain a new line, or
-when the skip started where a line is known to start: where the scanner starts at column 1, as the start of the text or a
-delimited text of `ParseManyAsync` after a `'\n'`. The skip starts a line after:
+when the skip started at the start of the input (offset 0 at line 1 and column 1). The skip starts a line after:
 
 - a new line of the white space: the new lines of `WithWhiteSpace(whiteSpace, newLines)`, which are not white space when
   `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then. The
@@ -1897,9 +1896,9 @@ parser.Parse("x = a --> b");               // x = a-- > b
 
 The skip of a token only sees the white space and comments since the token before: a grammar which reads the new lines as
 tokens starts no line after them. `ParseManyAsync` skips the white space of the context's set between the values, before
-the value skips its comments: a value starts a line when that white space contains a new line of the set. With the comments
-as the `WhiteSpaceParser` of the `ContextFactory`, the driver skips them between the values, as `Parse` does. The hints of the parser are the same, the first char of the
-comment among them. Only `CommentsParser` tracks where a line starts: `Build()` throws an `InvalidOperationException` when
+the value skips its comments, and a value or a delimited text starts after a value, a separator or a delimiter, not at the
+start of a line. Set the comments as the `WhiteSpaceParser` of the `ContextFactory`: the driver then skips them between the
+values, which reads them as `Parse` does. The hints of the parser are the same, the first char of the comment among them. Only `CommentsParser` tracks where a line starts: `Build()` throws an `InvalidOperationException` when
 the builder would compose the parsers of its elements instead.
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each

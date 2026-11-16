@@ -143,7 +143,7 @@ public abstract partial class Parser<T>
                 case StreamingStep.End:
                     yield break;
                 default:
-                    await driver.GrowAsync(items.RetryOffset, items.RetryStartsLine).ConfigureAwait(false);
+                    await driver.GrowAsync(items.RetryOffset).ConfigureAwait(false);
                     break;
             }
         }
@@ -170,7 +170,7 @@ public abstract partial class Parser<T>
         {
             if (skipWhiteSpace)
             {
-                StreamingDriver.SkipWhiteSpaceBeforeValue(context);
+                context.SkipWhiteSpace();
 
                 if (cursor.Eof)
                 {
