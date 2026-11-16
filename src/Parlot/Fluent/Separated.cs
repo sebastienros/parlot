@@ -167,7 +167,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
             if (ElementPrefixes(_parser) is { } first && ElementPrefixes(_last!) is { } second)
             {
-                var union = new List<string>(first);
+                var union = new List<string>();
+
+                foreach (var prefix in first)
+                {
+                    if (!union.Contains(prefix))
+                    {
+                        union.Add(prefix);
+                    }
+                }
 
                 foreach (var prefix in second)
                 {
@@ -187,14 +195,10 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return cached.Prefixes;
     }
 
-    // The prefixes of an element, or its chars as prefixes of one char when it doesn't tell more, like a choice reads them
-    private static string[]? ElementPrefixes(Parser<T> element)
+    // The prefixes of an element for each char it can start with, read like a choice reads them: its chars as prefixes of
+    // one char when it doesn't tell more
+    private static List<string>? ElementPrefixes(Parser<T> element)
     {
-        if (SeekableHints.Prefixes(element) is { } prefixes)
-        {
-            return prefixes;
-        }
-
         var hints = SeekableHints.Of(element);
 
         if (!hints.CanSeek || !SeekableHints.IsExact(hints.ExpectedChars))
@@ -202,14 +206,14 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             return null;
         }
 
-        var chars = new string[hints.ExpectedChars.Length];
+        var prefixes = new List<string>();
 
-        for (var i = 0; i < chars.Length; i++)
+        foreach (var c in hints.ExpectedChars)
         {
-            chars[i] = hints.ExpectedChars[i].ToString();
+            prefixes.AddRange(SeekableHints.Prefixes(element, c));
         }
 
-        return chars;
+        return prefixes;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
