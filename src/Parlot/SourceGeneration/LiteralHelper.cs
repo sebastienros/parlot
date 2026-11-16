@@ -28,7 +28,9 @@ public static class LiteralHelper
 
             if (Enum.IsDefined(enumType, value))
             {
-                return $"{typeName}.{value}";
+                // A member named like a keyword is escaped
+                var name = value.ToString()!;
+                return SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ? $"{typeName}.@{name}" : $"{typeName}.{name}";
             }
 
             var number = Convert.ChangeType(value, Enum.GetUnderlyingType(enumType), System.Globalization.CultureInfo.InvariantCulture);

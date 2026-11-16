@@ -87,7 +87,7 @@ public abstract partial class Parser<T>
 
             if (withReason)
             {
-                error = ParseError.FromFurthestReason(context.Scanner.Cursor);
+                error = ParseError.FromFurthestReason(context);
             }
         }
         catch (ParseException e)

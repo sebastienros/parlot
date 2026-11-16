@@ -26,7 +26,7 @@ public static partial class FailureReasonGrammars
     // A number which isn't followed by an identifier
     [GenerateParser(nameof(TryParseNumber))]
     public static Parser<string> BuildNumber() =>
-        Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), FailureReason.IdentifierAfterNumber)
+        Terms.Integer().WhenNotFollowedBy(Literals.Text("in"), FailureReason.@in).WhenNotFollowedBy(Literals.Identifier(), FailureReason.IdentifierAfterNumber)
             .Then(static value => value.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .AndSkip(Terms.Char(';')).Eof();
 

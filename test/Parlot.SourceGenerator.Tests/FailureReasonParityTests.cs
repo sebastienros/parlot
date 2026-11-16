@@ -13,6 +13,7 @@ namespace Parlot.SourceGenerator.Tests;
 
 public enum FailureReason
 {
+    @in,
     ReservedWord,
     IdentifierAfterNumber,
     InvalidDigit,
@@ -47,10 +48,10 @@ public class FailureReasonParityTests
             .Eof(),
             "from!;, ", FailureReasonGrammars.TryParseWhen, FailureReasonGrammars.TryParseWhen),
         ["Number"] = (
-            Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), FailureReason.IdentifierAfterNumber)
+            Terms.Integer().WhenNotFollowedBy(Literals.Text("in"), FailureReason.@in).WhenNotFollowedBy(Literals.Identifier(), FailureReason.IdentifierAfterNumber)
                 .Then(static value => value.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .AndSkip(Terms.Char(';')).Eof(),
-            "12ab ;", FailureReasonGrammars.TryParseNumber, FailureReasonGrammars.TryParseNumber),
+            "12abin ;", FailureReasonGrammars.TryParseNumber, FailureReasonGrammars.TryParseNumber),
         ["Not"] = (
             Not(Terms.Keyword("let"), FailureFlags.A | FailureFlags.B).SkipAnd(Word).AndSkip(Terms.Char(';')).Eof(),
             "let ;", FailureReasonGrammars.TryParseNot, FailureReasonGrammars.TryParseNot),
@@ -95,6 +96,7 @@ public class FailureReasonParityTests
         { "When", "word ,", null, 5 },
         { "Number", " 12ab;", FailureReason.IdentifierAfterNumber, 3 },
         { "Number", "12 ab;", null, 3 },
+        { "Number", " 3in;", FailureReason.@in, 2 },
         { "Not", "  let;", FailureFlags.A | FailureFlags.B, 2 },
         { "ThenTry", " from;", FailureReason.ReservedWord, 1 },
         { "ThenTry", " 199;", (short)42, 1 },
@@ -190,6 +192,11 @@ public class FailureReasonParityTests
         Assert.Contains("private static readonly object", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
         Assert.Contains("((global::Parlot.SourceGenerator.Tests.FailureFlags)(3))", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
         Assert.Contains("RecordRejected(", body, StringComparison.Ordinal);
+
+        // A member named like a keyword is escaped
+        context = new Parlot.SourceGeneration.SourceGenerationContext();
+        ((Parlot.SourceGeneration.ISourceable)Not(Terms.Char('a'), FailureReason.@in)).GenerateSource(context);
+        Assert.Contains("FailureReason.@in", string.Join("\n", context.StaticFields), StringComparison.Ordinal);
 
         // A char and a bool are constants too
         context = new Parlot.SourceGeneration.SourceGenerationContext();

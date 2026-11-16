@@ -269,6 +269,19 @@ public class FailureReasonTests
     }
 
     [Fact]
+    public void Collected_Diagnostics_Leave_The_Reason_On_The_Cursor()
+    {
+        var parser = Statement.Or(Terms.Char('(').ElseError("Expected '('").Then(static _ => "("));
+        var context = new ParseContext(new Scanner("from")) { CollectDiagnostics = true };
+
+        // The error is only a fatal one, the grammar's errors are diagnostics
+        Assert.False(parser.TryParse(context, out _, out var error));
+        Assert.Null(error);
+        Assert.Single(context.Diagnostics);
+        Assert.Equal("'from' is reserved", context.Scanner.Cursor.FurthestReason);
+    }
+
+    [Fact]
     public void Reason_Is_Required()
     {
         Assert.Throws<ArgumentNullException>(() => Word.When(static (_, _) => true, null!));

@@ -17,9 +17,16 @@ public class ParseError
     /// </summary>
     public object? Reason { get; set; }
 
-    // The error of a parse which failed without an exception: the reason recorded at the furthest failure, if any
-    internal static ParseError? FromFurthestReason(Cursor cursor)
+    // The error of a parse which failed without an exception: the reason recorded at the furthest failure, if any. None
+    // when diagnostics are collected: an error is then a fatal one, the errors of the grammar are in the diagnostics.
+    internal static ParseError? FromFurthestReason(Fluent.ParseContext context)
     {
+        if (context.CollectDiagnostics)
+        {
+            return null;
+        }
+
+        var cursor = context.Scanner.Cursor;
         var reason = cursor.FurthestReason;
 
         if (reason is null)

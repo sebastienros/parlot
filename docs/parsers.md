@@ -126,7 +126,8 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
   recorded before the lookahead is forgotten when its parser records one further. Rejections with a reason inside a
   lookahead are best avoided: give the reason to the lookahead, like `Not(parser, reason)`, instead. `AsToken` forgets the
   reasons its parser recorded too, like its failures: give the reason to a parser around the token.
-- An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`.
+- An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`. With
+  `CollectDiagnostics`, the error of `TryParse` is only a fatal one: read the reason from `Cursor.FurthestReason`.
 
 Source-generated parsers return the reason in their failure tuple, see
 [Failure position](source-generation.md#failure-position). Recording a reason costs a compare and two stores, on the
