@@ -1,4 +1,5 @@
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -51,17 +52,18 @@ internal sealed class OperatorStart
             return null;
         }
 
-        // The choices build their lookup tables first, which their hints are the keys of, see SeekableHints.Of()
+        // The choices build their lookup tables first, which their hints are the keys of, see SeekableHints.Of(). The hints of a
+        // choice which can start with any char are null.
         lock (SeekableResolution.SyncRoot)
         {
             foreach (var choice in choices)
             {
-                var (canSeek, expectedChars, skipWhitespace) = SeekableHints.Of(choice);
-
-                if (!canSeek || expectedChars.Length == 0 || Array.IndexOf(expectedChars, OneOf<object>.OtherSeekableChar) >= 0)
+                if (SeekGuard.SeekableHintsOf(choice) is not { } hints)
                 {
                     return null;
                 }
+
+                var (expectedChars, skipWhitespace) = hints;
 
                 skipsWhiteSpace |= skipWhitespace;
 
@@ -119,36 +121,11 @@ internal sealed class OperatorStart
     /// Gets the C# expression which tells whether an operator can start at the cursor, like
     /// <see cref="MayStart(ParseContext)"/>. Not when the input is a reader, or when the diagnostics are collected.
     /// </summary>
-    public string GenerateTest(string ctx, string cursor)
+    public string GenerateTest(SourceGenerationContext context, string cursor)
     {
-        var test = Test($"{cursor}.Current", _chars, _anyNonAscii);
-        return _skipsWhiteSpace ? $"({test} || {ctx}.MaySkipWhiteSpace({cursor}.Current))" : $"({test})";
-    }
+        var chars = _anyNonAscii ? [.. _chars, OneOf<object>.NonAsciiSeekableChar] : _chars;
+        var test = SeekGuard.GenerateTest(context, $"{cursor}.Current", chars);
 
-    // A C# expression which tests whether the char value is one of chars, or above ASCII when anyNonAscii is set
-    private static string Test(string value, char[] chars, bool anyNonAscii)
-    {
-        var patterns = new List<string>();
-        var listed = new List<char>();
-
-        foreach (var c in chars)
-        {
-            if (c < 128 || !anyNonAscii)
-            {
-                listed.Add(c);
-            }
-        }
-
-        if (listed.Count > 0)
-        {
-            patterns.Add(OneOf<object>.BuildCharPattern(listed, rangeThreshold: 4));
-        }
-
-        if (anyNonAscii)
-        {
-            patterns.Add(">= '\\u0080'");
-        }
-
-        return $"{value} is {string.Join(" or ", patterns)}";
+        return _skipsWhiteSpace ? $"(({test}) || {context.ParseContextName}.MaySkipWhiteSpace({cursor}.Current))" : $"({test})";
     }
 }

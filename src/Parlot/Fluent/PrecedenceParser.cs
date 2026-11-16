@@ -1501,7 +1501,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // choices are invoked: a local function cost ExprBench.ParlotGeneratedBig 6%, whose operators are all after white
         // space. A reader is read through the choices, which pin the white space, as are the diagnostics collected.
         string? StartTest(OperatorStart? start) =>
-            compacting || context.CollectDiagnostics || start is null ? null : start.GenerateTest(ctx, cursor);
+            compacting || context.CollectDiagnostics || start is null ? null : start.GenerateTest(context, cursor);
 
         // The call of a choice of the lookup, only when one of its operators can start with the char after the operand
         string? LookupCall(LookupChoice? choice) => choice is null

@@ -266,6 +266,27 @@ public class PrecedenceTests
         Assert.Equal(Run(runtime, input), Run(reader, input, 1));
     }
 
+    [Theory]
+    // The first-char tests of Operators(): patterns need C# 9, an unknown version gets the comparisons
+    [InlineData(0, false)]
+    [InlineData(8, false)]
+    [InlineData(10, true)]
+    public void Generated_First_Char_Tests_Follow_The_Language_Version(int version, bool patterns)
+    {
+        var context = new Parlot.SourceGeneration.SourceGenerationContext("context", "Test", targetFramework: null, csharpLanguageMajorVersion: version);
+        var parser = Terms.Integer().Operators()
+            .Unary((Terms.Char('-'), static x => -x), (Terms.Char('~'), static x => ~x))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => a + b), (Terms.Char('-'), static (a, b) => a - b));
+        var body = string.Join("\n", Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(parser).GenerateSource(context).Body);
+
+        // The test of the prefix operators, and of the operators after an operand
+        Assert.Equal(patterns, body.Contains("or ' ' or '-' or '~')", StringComparison.Ordinal));
+        Assert.Equal(patterns, body.Contains("or ' ' or '+' or '-')", StringComparison.Ordinal));
+        Assert.Equal(!patterns, body.Contains(".Current == '-' || cursor.Current == '~')", StringComparison.Ordinal));
+        Assert.Equal(!patterns, body.Contains(".Current == '+' || cursor.Current == '-')", StringComparison.Ordinal));
+        Assert.Contains(".MaySkipWhiteSpace(", body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Generated_Table_Parses_Random_Expressions_Like_The_Runtime()
     {
