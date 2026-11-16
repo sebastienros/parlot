@@ -162,5 +162,5 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
             valueVariable != null ? $"{valueVariable} = new {optionTypeName}();" : null);
     }
 
-    public override string ToString() => $"{_parser}?";
+    public override string ToString() => FormatOnce($"{_parser}?");
 }

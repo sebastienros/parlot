@@ -81,5 +81,7 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISource
         return result;
     }
 
-    public override string ToString() => _parser.ToString() ?? "";
+    private protected override bool IsTextWrapper => true;
+
+    public override string ToString() => FormatOnce($"{_parser}");
 }
