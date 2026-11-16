@@ -588,7 +588,7 @@ public class ParseContext
 
     /// <summary>
     /// Records the white space a choice skipped, from <paramref name="start"/> to the cursor, before it invokes alternatives
-    /// whose <see cref="NoNewLineBefore{T}"/> parsers look for a new line in it, and returns the white space recorded before,
+    /// whose <c>NoNewLineBefore</c> parsers look for a new line in it, and returns the white space recorded before,
     /// which <see cref="ExitSkippedWhiteSpace(long)"/> restores once they are tried.
     /// </summary>
     /// <remarks>
@@ -845,7 +845,7 @@ public class ParseContext
     /// <summary>
     /// <see cref="SkipWhiteSpaceAndFindNewLine(string)"/>, or, where the white space a choice skipped before it invoked this
     /// parser ends, whether that white space contains a new line, see <see cref="EnterSkippedWhiteSpace(int)"/>. Used by
-    /// <see cref="NoNewLineBefore{T}"/>.
+    /// <c>NoNewLineBefore</c>.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool SkipWhiteSpaceAndFindNewLineBefore(string? newLines)
