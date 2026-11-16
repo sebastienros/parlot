@@ -44,6 +44,7 @@ discarding it.
 ### Tokens
 
 The parsers which read the cursor directly, such as literals, identifiers, numbers, strings or patterns, are *tokens*.
+`Interpolated` reads its delimiters and each chunk of its text as tokens, and its holes with their own parsers.
 In compacting mode they run through `ParseContext.ParseToken`:
 
 1. the token parses the current window, which isn't final: the `Cursor` records in `HitEnd` that the token read its end;

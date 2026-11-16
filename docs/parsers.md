@@ -794,7 +794,7 @@ Code points above U+FFFF decode to surrogate pairs. A sequence a flag claims but
 `StringEscapes.EscapedQuote | StringEscapes.Quotes | StringEscapes.NewLineAndTab | StringEscapes.Null | StringEscapes.TwoDigitHex | StringEscapes.BracedUnicode | StringEscapes.LineContinuation`
 (except that Rust also skips the white space after a line continuation), and a JavaScript template literal, which can span
 lines, is `StringEscapes.JavaScript & ~StringEscapes.SingleLine` with `StringLiteralQuotes.Backtick` (without its `${}`
-substitutions). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
+substitutions, which [Interpolated](#interpolated) reads). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
 own parser. To get the raw text of a literal as well, as a JavaScript AST does, read its offsets in a
 `Then(static (context, start, end, value) => ...)` callback, or wrap the string parser in `Capture()` for the raw text only.
 
@@ -812,6 +812,60 @@ parser.Parse("'a\\nb'"); // a\nb, the backslash and the `n` are kept
 
 var javaScript = Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false);
 ```
+
+### Interpolated
+
+Matches an interpolated text, like a JavaScript template literal (`` `a${x}b` ``), a C# interpolated string (`$"a{x}b"`)
+or a string template: a text between two delimiters, with escapes, and holes between two other delimiters whose values a
+parser reads.
+
+```c#
+Parser<Interpolation<T>> Interpolated<T>(string open, string close, string holeOpen, string holeClose, Parser<T> hole,
+    InterpolationOptions options = InterpolationOptions.None, char escape = '\\')
+```
+
+Usage:
+
+```c#
+var expression = Deferred<Expression>();
+
+// The holes of a template hold expressions, which can be templates too
+var template = Terms.Interpolated("`", "`", "${", "}", expression);
+
+expression.Parser = OneOf(template.Then<Expression>(static x => new Template(x)), /* ... */);
+```
+
+The value is an `Interpolation<T>`:
+
+- `Chunks` is the raw text between the delimiters and the holes, as `TextSpan`s of the input, one more than the holes:
+  `Chunks[i]` is the text before `Holes[i]`, and the last chunk the text after the last hole. A chunk can be empty, so
+  `` `${a}${b}` `` has three empty chunks.
+- `Holes` are the values `hole` read, in the order of the text.
+
+`Chunks` and `Holes` are lists (`IReadOnlyList<T>`) without allocations of their own: a text without a hole keeps its
+chunk in the value, and a text with holes keeps each hole with the chunk before it in a single array.
+
+A chunk ends at the first `close` or `holeOpen`. The `escape` char skips the char after it, whatever it is, so `` \` ``
+and `\${` are text; `'\0'` is no escape char. The escape sequences aren't decoded: the chunks are the raw text, which a
+grammar decodes with its own escapes, and a JavaScript grammar keeps for the raw strings of tagged templates. A first
+char of `holeOpen` which isn't followed by the rest of it is text, like the `$` of `` `a$b` ``. The chunks are found
+with a vectorized search of the chars they can end at, not by invoking a parser for each char or run of chars.
+
+After the value of a hole, the white space is skipped before `holeClose`, as a `Terms` parser does, unless `options`
+holds `InterpolationOptions.NoWhiteSpaceBeforeHoleClose`, which a `holeClose` that starts with white space, or with a
+comment of the context, needs (one that starts with a space or a tab is rejected without it). With `InterpolationOptions.NoNewLines`, a chunk can't hold
+`'\n'` or `'\r'`, even after the escape char, as in a regular C# interpolated string. `Terms.Interpolated` skips the white
+space before `open`, `Literals.Interpolated` doesn't.
+
+The parser fails, with the cursor where it was, when the text ends before `close`, when a hole doesn't match or isn't
+followed by `holeClose`, or at a new line with `NoNewLines`. `close` and `holeOpen` can't start with one another, nor with
+the escape char. Doubled delimiters, like `{{` and `}}` in C#, aren't escapes: parse the chunks of such a language with
+a `holeOpen` that a choice tells apart, or with its own parser.
+
+A choice dispatches to the parser on the first char of `open`, and tells it from the other alternatives by the whole
+`open` text. When parsing a stream, the delimiters and each chunk are tokens, and a chunk is buffered while it is read;
+the holes aren't, and the parser doesn't pin its start, so a template doesn't need to fit in the buffer unless a parser
+which invokes it does, like a choice which can try another alternative.
 
 ### Identifier
 

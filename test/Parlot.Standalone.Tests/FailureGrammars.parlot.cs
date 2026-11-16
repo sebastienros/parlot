@@ -340,6 +340,11 @@ public static partial class FailureGrammars
     [GenerateParser(nameof(RejectedSpanWhiteSpace))]
     public static Parser<string> BuildRejectedSpanWhiteSpace() =>
         Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
+
+    // A template literal whose holes hold identifiers
+    [GenerateParser(nameof(Template))]
+    public static Parser<int> BuildTemplate() =>
+        Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Eof();
 }
 
 public static partial class FailureGrammars

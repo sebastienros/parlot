@@ -30,6 +30,21 @@ public class FailureTests
         Assert.Equal(failure, readerFailure);
     }
 
+    [Theory]
+    [InlineData("`abc", 4, 1, 5)]
+    [InlineData("`a\\", 3, 1, 4)]
+    [InlineData("`a${b}\nc", 8, 2, 2)]
+    [InlineData("`a${b c}`", 6, 1, 7)]
+    [InlineData("`a${}`", 4, 1, 5)]
+    [InlineData("`a` x", 3, 1, 4)]
+    public void Interpolated_Text_Returns_The_Furthest_Failure(string text, int offset, int line, int column)
+    {
+        Assert.False(FailureGrammars.Template(text, out _, out var failure));
+        Assert.Equal((offset, line, column), failure);
+        Assert.False(FailureGrammars.Template(new StringReader(text), out _, out var readerFailure));
+        Assert.Equal(failure, readerFailure);
+    }
+
     [Fact]
     public void Success_Returns_No_Failure()
     {

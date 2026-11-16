@@ -454,14 +454,41 @@ public sealed class SourceGenerationContext
         return builder.Append('"').ToString();
     }
 
-    private string GetSharedField(object owner, string declaration, string initializer)
-    {
-        _sharedFields ??= new Dictionary<object, string>(ReferenceComparer.Instance);
+    /// <summary>
+    /// Returns the name of the static field holding a <c>SearchValues&lt;char&gt;</c> of <paramref name="chars"/>, declared on
+    /// .NET 8 and later only, registering it the first time for <paramref name="owner"/>, whatever the number of times its
+    /// code is generated.
+    /// </summary>
+    internal string GetSearchValuesField(object owner, string chars)
+        => GetSharedField(ref _searchValuesFields, owner, "private static readonly global::System.Buffers.SearchValues<char>",
+            $"global::System.Buffers.SearchValues.Create({LiteralHelper.StringToLiteral(chars)})", condition: "NET8_0_OR_GREATER");
 
-        if (!_sharedFields.TryGetValue(owner, out var fieldName))
+    // The SearchValues fields, by the object they are generated for, apart from the other fields of the same object
+    private Dictionary<object, string>? _searchValuesFields;
+
+    private string GetSharedField(object owner, string declaration, string initializer)
+        => GetSharedField(ref _sharedFields, owner, declaration, initializer, condition: null);
+
+    // The field is declared under #if condition when there is one
+    private string GetSharedField(ref Dictionary<object, string>? fields, object owner, string declaration, string initializer, string? condition)
+    {
+        fields ??= new Dictionary<object, string>(ReferenceComparer.Instance);
+
+        if (!fields.TryGetValue(owner, out var fieldName))
         {
+            if (condition is not null)
+            {
+                StaticFields.Add("#if " + condition);
+            }
+
             fieldName = RegisterStaticField(declaration, initializer);
-            _sharedFields[owner] = fieldName;
+
+            if (condition is not null)
+            {
+                StaticFields.Add("#endif");
+            }
+
+            fields[owner] = fieldName;
         }
 
         return fieldName;
