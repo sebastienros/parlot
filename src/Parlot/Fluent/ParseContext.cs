@@ -643,6 +643,29 @@ public class ParseContext
         return current;
     }
 
+    /// <summary>
+    /// The char after the white space at the cursor, which moves back to where it was, for a parser which tests it before
+    /// invoking choices whose alternatives skip the white space: <c>Operators()</c> before its prefix and operator choices.
+    /// </summary>
+    /// <param name="recorded">The failure recorded once the white space was skipped. The cursor moving back from it records
+    /// where the white space ends, where the choices would fail when the char is none of theirs: when the parser invokes
+    /// them, it restores <paramref name="recorded"/>, as they read the white space again from the cache of the context.</param>
+    /// <remarks>Only when the input is a string: it doesn't pin the white space.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal char CharAfterSkippedWhiteSpace(out int recorded)
+    {
+        var cursor = Scanner.Cursor;
+        var start = cursor.Offset;
+
+        SkipWhiteSpace();
+
+        var current = cursor.Current;
+        recorded = cursor.RecordedFailure;
+        cursor.ResetPosition(start);
+
+        return current;
+    }
+
     public void SkipWhiteSpace()
     {
         var offset = Scanner.Cursor.Offset;

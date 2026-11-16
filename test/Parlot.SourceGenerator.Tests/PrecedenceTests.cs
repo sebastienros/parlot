@@ -42,6 +42,8 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseConditionalLastWithContext(TextReader reader, out string value);
     public static partial bool TryParseValuedLevels(string text, out string value);
     public static partial bool TryParseValuedLevels(TextReader reader, out string value);
+    public static partial bool TryParseMixedStart(string text, out string value, out int failureOffset);
+    public static partial bool TryParseMixedStart(TextReader reader, out string value);
 }
 
 internal static class PrecedenceAst
@@ -150,6 +152,93 @@ public class PrecedenceTests
             Assert.Equal(Run(right, input), Run(PrecedenceGrammars.TryParseTightestRight, input));
             Assert.Equal(Run(valued, input), Run(PrecedenceGrammars.TryParseTightestValued, input));
         }
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("a + b")]
+    [InlineData("a -b")]
+    [InlineData("a - b")]
+    [InlineData("a- b")]
+    [InlineData("-a")]
+    [InlineData("- a")]
+    [InlineData("typeof a")]
+    [InlineData("  typeof -a")]
+    [InlineData("! !a.b")]
+    [InlineData("a * b")]
+    [InlineData("a*b")]
+    [InlineData("a .b < c && d")]
+    [InlineData("a , b")]
+    [InlineData("a   ")]
+    [InlineData("a  +  ")]
+    [InlineData("  ")]
+    [InlineData("(a + b")]
+    [InlineData("a\n+\nb")]
+    public void Generated_Table_Testing_The_First_Chars_Of_Its_Operators_Parses_Like_The_Runtime(string input)
+    {
+        AssertMixedStart(RuntimeMixedStart(), input);
+    }
+
+    [Fact]
+    public void Generated_Table_Testing_The_First_Chars_Of_Its_Operators_Parses_Random_Expressions_Like_The_Runtime()
+    {
+        var runtime = RuntimeMixedStart();
+        string[] tokens = ["a", "b", "1", "-", "+", "*", "/", "**", "!", "typeof", ".", "<", "&&", "(", ")", ",", " ", " ", "  ", "\n"];
+        var random = new Random(580);
+        var sb = new StringBuilder();
+
+        for (var i = 0; i < 3000; i++)
+        {
+            sb.Clear();
+
+            for (var j = random.Next(1, 12); j > 0; j--)
+            {
+                sb.Append(tokens[random.Next(tokens.Length)]);
+            }
+
+            AssertMixedStart(runtime, sb.ToString());
+        }
+    }
+
+    // The runtime table of PrecedenceGrammars.BuildMixedStart
+    internal static Parser<string> RuntimeMixedStart()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()).Then(static x => x.ToString()), static (string x, string name) => PrecedenceAst.Member(x, name)))
+            .Unary((Literals.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .Unary((Terms.Text("typeof"), static x => PrecedenceAst.Prefix("typeof ", x)))
+            .Unary((Terms.Char('!').Then(static (_, start, _, _) => start), static (string x, int start) => $"(!@{start}{x})"))
+            .RightAssociative((Terms.Text("**"), static (a, b) => PrecedenceAst.Binary("**", a, b)))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)), (Terms.Char('/'), static (a, b) => PrecedenceAst.Binary("/", a, b)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .LeftAssociative([Terms.Text("<")], static (string a, string b, string op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Text("&&"), static (a, b) => PrecedenceAst.Binary("&&", a, b)));
+
+        return expression.Eof();
+    }
+
+    // The values, and where the parses fail, are the ones of the runtime, from a string and from a reader
+    private static void AssertMixedStart(Parser<string> runtime, string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var expected = runtime.TryParse(context, out var expectedValue, out _);
+
+        Assert.Equal(expected, PrecedenceGrammars.TryParseMixedStart(input, out var value, out var failure));
+
+        if (expected)
+        {
+            Assert.Equal(expectedValue, value);
+        }
+        else
+        {
+            Assert.Equal(context.Scanner.Cursor.FurthestOffset, failure);
+        }
+
+        Assert.Equal(Run(runtime, input), Run(PrecedenceGrammars.TryParseMixedStart, input, 1));
     }
 
     [Fact]

@@ -412,14 +412,15 @@ public class ValuedOperatorsTests
     }
 
     [Theory]
-    [InlineData("a", 1)]
-    [InlineData("a )", 1)]
-    [InlineData("a || b", 2)]
-    [InlineData("a[b] || c", 4)]
-    [InlineData("a ? b : c", 3)]
+    // No choice is invoked after an operand which no operator follows: at the end, or before ), ] and :
+    [InlineData("a", 0)]
+    [InlineData("a )", 0)]
+    [InlineData("a || b", 1)]
+    [InlineData("a[b] || c", 2)]
+    [InlineData("a ? b : c", 1)]
     // The ** level is probed, then the * is looked up from the next level, and the conditional is probed before the ??
-    [InlineData("a * b", 3)]
-    [InlineData("a ?? b", 3)]
+    [InlineData("a * b", 2)]
+    [InlineData("a ?? b", 2)]
     public void ConsecutiveValuedLevelsShouldBeLookedUpThroughASingleChoice(string input, int lookups)
     {
         var expression = Deferred<string>();
