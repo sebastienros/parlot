@@ -13,5 +13,5 @@ public static partial class ParserExtensions
     /// off when the strings are kept, like the identifiers of a syntax tree held in memory. A string literal also decodes
     /// its escape sequences into the pool.
     /// </remarks>
-    public static Parser<string> ToPooledString(this Parser<TextSpan> parser) => new PooledString(parser);
+    public static Parser<string> ToPooledString(this Parser<TextSpan> parser) => parser is SkipWhiteSpace<TextSpan> s ? new SkipWhiteSpace<string>(new PooledString(s.Parser)) : new PooledString(parser);
 }

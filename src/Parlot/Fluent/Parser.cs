@@ -54,22 +54,22 @@ public abstract partial class Parser<T> : IParser<T>
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds.
     /// </summary>
-    public Parser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
+    public Parser<U> Then<U>(Func<T, U> conversion) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new Then<T, U>(s.Parser, conversion)) : new Then<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result, and can alter the current <see cref="ParseContext"/>.
     /// </summary>
-    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
+    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new Then<T, U>(s.Parser, conversion)) : new Then<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result, and can use the <see cref="ParseContext"/> and the start and end offsets.
     /// </summary>
-    public Parser<U> Then<U>(Func<ParseContext, int, int, T, U> conversion) => new Then<T, U>(this, conversion);
+    public Parser<U> Then<U>(Func<ParseContext, int, int, T, U> conversion) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new Then<T, U>(s.Parser, conversion)) : new Then<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result.
     /// </summary>
-    public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
+    public Parser<U> Then<U>(U value) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new Then<T, U>(s.Parser, value)) : new Then<T, U>(this, value);
 
     /// <summary>
     /// Builds a parser that discards the previous result and returns the default value of type U.
@@ -119,7 +119,7 @@ public abstract partial class Parser<T> : IParser<T>
     /// Receives the <see cref="ParseContext"/>, the start and end offsets of the value and the value, and returns whether it
     /// is converted, the converted value in its <see langword="out"/> parameter.
     /// </param>
-    public Parser<U> ThenTry<U>(TryConvert<T, U> conversion) => new ThenTry<T, U>(this, conversion);
+    public Parser<U> ThenTry<U>(TryConvert<T, U> conversion) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new ThenTry<T, U>(s.Parser, conversion)) : new ThenTry<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result with a conversion which can reject it: when
@@ -127,7 +127,7 @@ public abstract partial class Parser<T> : IParser<T>
     /// the cursor is moved back to where it was, like <see cref="When(Func{ParseContext, T, bool})"/>.
     /// </summary>
     /// <param name="conversion">Returns whether the value is converted, and the converted value.</param>
-    public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion) => new ThenTry<T, U>(this, conversion);
+    public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<U>(new ThenTry<T, U>(s.Parser, conversion)) : new ThenTry<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
@@ -187,7 +187,7 @@ public abstract partial class Parser<T> : IParser<T>
     /// <summary>
     /// Builds a parser that verifies the previous parser result matches a predicate.
     /// </summary>
-    public Parser<T> When(Func<ParseContext, T, bool> predicate) => new When<T>(this, predicate);
+    public Parser<T> When(Func<ParseContext, T, bool> predicate) => this is SkipWhiteSpace<T> s ? new SkipWhiteSpace<T>(new When<T>(s.Parser, predicate)) : new When<T>(this, predicate);
 
     /// <summary>
     /// Builds a parser that ensures the specified parser matches at the current position without consuming input (positive lookahead).
