@@ -257,5 +257,5 @@ public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"AsToken ({_parser})";
+    public override string ToString() => FormatOnce($"AsToken ({_parser})");
 }

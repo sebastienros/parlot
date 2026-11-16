@@ -89,5 +89,9 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable, ILo
         return result;
     }
 
-    public override string ToString() => _parser.ToString() ?? "IParserAdapter";
+    private protected override bool IsTextWrapper => true;
+
+    public override string ToString() => _parser is IParserText
+        ? FormatOnce($"{_parser}")
+        : _parser.ToString() ?? "IParserAdapter";
 }

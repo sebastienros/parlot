@@ -69,5 +69,5 @@ public sealed class Commit<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoop
         return result;
     }
 
-    public override string ToString() => $"{_parser} (Commit)";
+    public override string ToString() => FormatOnce($"{_parser} (Commit)");
 }

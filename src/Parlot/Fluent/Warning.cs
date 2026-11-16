@@ -179,5 +179,5 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => writer.Generate(_parser, valueVariable, fail);
 
-    public override string ToString() => $"{_parser} (Warning)";
+    public override string ToString() => FormatOnce($"{_parser} (Warning)");
 }

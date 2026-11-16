@@ -207,5 +207,5 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
             [(_before, typeof(A), false), (_parser, typeof(T), true), (_after, typeof(B), false)],
             static values => values[1]!);
 
-    public override string ToString() => Name ?? $"Between({_before},{_parser},{_after})";
+    public override string ToString() => Name ?? FormatOnce($"Between({_before},{_parser},{_after})");
 }

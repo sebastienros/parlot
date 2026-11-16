@@ -156,5 +156,5 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"{Parser} (No new line before)";
+    public override string ToString() => FormatOnce($"{Parser} (No new line before)");
 }

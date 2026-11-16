@@ -75,5 +75,5 @@ public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
             $"Use .Then(static _ => yourValue) instead of .Discard(value).");
     }
 
-    public override string ToString() => $"{_parser} (Discard)";
+    public override string ToString() => FormatOnce($"{_parser} (Discard)");
 }

@@ -106,6 +106,11 @@ type implements each of these that applies:
   parser that ignores the value of a parser it invokes (`Capture`, `AndSkip`'s skipped parser, `Between`'s delimiters,
   a constant `Then`) reads `CanParseWithoutValue` once, in its constructor. Add each override to
   `ParseWithoutValueTests`.
+- A `ToString()` which writes the parsers it invokes is `FormatOnce($"...")`, an interpolated string handler
+  (`ParserPrinter`) in which they write their own text in one builder: a parser shared by others is then written once
+  per call, then as a reference (`docs/writing.md`, "The text of a parser"), instead of once per path to it, which grows
+  exponentially. A list of parsers is interpolated as a `ParserList`. A wrapper which only adds to the text of the parser
+  it invokes, like `SkipWhiteSpace` around the `Terms`, also overrides `IsTextWrapper`, to be written each time.
 - A wrapper, a parser that never fails, or one that starts with a fixed text goes in the sets at the top of
   `GrammarAnalysis`.
 - A literal, which only reads the text, implements the internal `IInvokesOnlyLiterals`, and a wrapper which invokes a single

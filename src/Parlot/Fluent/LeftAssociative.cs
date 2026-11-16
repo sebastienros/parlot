@@ -213,7 +213,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISeekablePrefixes, I
         return result;
     }
 
-    public override string ToString() => Name ?? $"LeftAssociative({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"LeftAssociative({_parser})");
 }
 
 public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
@@ -409,5 +409,5 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISeekable
         return result;
     }
 
-    public override string ToString() => Name ?? $"LeftAssociative({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"LeftAssociative({_parser})");
 }

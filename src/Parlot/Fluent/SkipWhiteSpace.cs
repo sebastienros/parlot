@@ -173,7 +173,9 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         writer.Generate(Parser, valueVariable, writer.SkipWhiteSpace(fail));
     }
 
-public override string ToString() => $"{Parser} (Skip WS)";
+    private protected override bool IsTextWrapper => true;
+
+    public override string ToString() => FormatOnce($"{Parser} (Skip WS)");
 }
 
 /// <summary>
