@@ -748,4 +748,44 @@ public class ScannerTests
         Assert.False(scanner.ReadDecimal(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals, out _));
         Assert.Equal(0, scanner.Cursor.Offset);
     }
+
+    [Theory]
+    [InlineData('f', "f\\u006ff", true, "f\\u006ff")]
+    [InlineData('f', "f\\u006f", false, null)]
+    [InlineData('f', "f\\x006ff", true, "f\\x006ff")]
+    [InlineData('f', "f\\x1f", false, null)]
+    [InlineData('f', "f\\x12fff", true, "f\\x12fff")]
+    [InlineData('f', "f\\x12ff", false, null)]
+    [InlineData('\'', "'\\x12345'", true, "'\\x12345'")]
+    [InlineData('5', "5\\x12345", true, "5\\x12345")]
+    public void ShouldAdvancePastHexAndUnicodeEscapeDigits(char quote, string input, bool expectedSuccess, string expected)
+    {
+        var scanner = new Scanner(input);
+        var success = scanner.ReadQuotedString(quote, out var result);
+
+        Assert.Equal(expectedSuccess, success);
+
+        if (expectedSuccess)
+        {
+            Assert.Equal(expected, result.ToString());
+            Assert.Equal(expected.Length, scanner.Cursor.Offset);
+        }
+        else
+        {
+            Assert.Equal(0, scanner.Cursor.Offset);
+        }
+    }
+
+    [Theory]
+    [InlineData('f', "f\\u006f")]
+    [InlineData('f', "f\\x1f")]
+    [InlineData('f', "f\\x12ff")]
+    public void ShouldMarkHitEndWhenEscapeConsumesTrailingQuoteCharInNonFinalBuffer(char quote, string input)
+    {
+        var scanner = new Scanner(input, isFinal: false);
+
+        Assert.False(scanner.ReadQuotedString(quote, out _));
+        Assert.Equal(0, scanner.Cursor.Offset);
+        Assert.True(scanner.Cursor.HitEnd);
+    }
 }

@@ -370,6 +370,11 @@ public abstract partial class Parser<T> : IParser<T>
 
         foreach (var parser in parsers)
         {
+            if (parser is null)
+            {
+                throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+            }
+
             canSeek &= parser.CanSeek && parser.SkipWhitespace == parsers[0].SkipWhitespace;
         }
 

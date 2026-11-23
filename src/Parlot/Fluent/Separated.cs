@@ -132,7 +132,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         ? (false, [], false)
         : self._last is null ? SeekableHints.Of(self._parser) : SeekableHints.Union(self._parser, self._last));
 
-    string[]? ISeekablePrefixes.ExpectedPrefixes => _last is null ? SeekableHints.Prefixes(_parser) : UnionPrefixes();
+    string[]? ISeekablePrefixes.ExpectedPrefixes => !Hints.CanSeek ? null : _last is null ? SeekableHints.Prefixes(_parser) : UnionPrefixes();
 
     // The prefixes of both elements, kept until SeekableResolution.Version changes, like the hints and LeadingWhiteSpace.Cache
     private PrefixesCache? _prefixes;

@@ -9,7 +9,7 @@ public static partial class Character
 {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsInRange(char ch, char min, char max) => ch - (uint)min <= max - (uint)min;
+    public static bool IsInRange(char ch, char min, char max) => unchecked(ch - (uint)min <= max - (uint)min);
 
     // DecimalDigits and HexDigits are exactly the ASCII digit and ASCII hex-digit sets, so the BCL
     // predicates are equivalent and compile to arithmetic instead of a SearchValues probe. See
@@ -274,7 +274,7 @@ public static partial class Character
 
         while (digits < maxDigits && digits + 1 < span.Length && IsHexDigit(span[digits + 1]))
         {
-            value = value * 16 + HexValue(span[digits + 1]);
+            value = unchecked(value * 16 + HexValue(span[digits + 1]));
             digits++;
         }
 

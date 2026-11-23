@@ -235,6 +235,54 @@ public class FailureReasonTests
     }
 
     [Fact]
+    public void Lookahead_Forgets_Reason_Recorded_At_The_Same_Offset()
+    {
+        // A reason recorded inside Not at offset 0 (same as recordedFailure) must not leak
+        var atZero = Not(Word.When(static (_, _) => false, "inner")).SkipAnd(Terms.Char('!')).Eof();
+        AssertReason(atZero, "foo", null, 0);
+
+        // Same at a non-zero offset when no reason was recorded there before the lookahead
+        var atNonZero = Terms.Char('>').SkipAnd(Not(Word.When(static (_, _) => false, "inner"))).SkipAnd(Terms.Char('!')).Eof();
+        AssertReason(atNonZero, ">foo", null, 1);
+
+        // Peek succeeding at offset 0 after an inner branch recorded a reason at offset 0
+        var peekAtZero = Peek(Word.When(static (_, _) => false, "inner").Or(Word)).SkipAnd(Terms.Char('!')).Eof();
+        AssertReason(peekAtZero, "foo", null, 0);
+    }
+
+    [Fact]
+    public void Lookahead_Preserves_Existing_Reason_At_The_Same_Offset()
+    {
+        // Branch 1 records "first" at offset 0; Branch 2 runs a lookahead at offset 0 which must not erase "first"
+        var parser = OneOf(
+            Word.When(static (_, _) => false, "first"),
+            Not(Word.When(static (_, _) => false, "inner")).SkipAnd(Terms.Char('!')).Then(static _ => "!")).Eof();
+
+        AssertReason(parser, "foo", "first", 0);
+
+        var atNonZero = Terms.Char('>').SkipAnd(OneOf(
+            Word.When(static (_, _) => false, "first"),
+            Not(Word.When(static (_, _) => false, "inner")).SkipAnd(Terms.Char('!')).Then(static _ => "!"))).Eof();
+
+        AssertReason(atNonZero, ">foo", "first", 1);
+    }
+
+    [Fact]
+    public void RecordFailure_Behind_FurthestOffset_Does_Not_Overwrite_Or_Leak_Reason()
+    {
+        var cursor = new Cursor("abcdef", TextPosition.Start);
+        cursor.RecordFailure(4, null);
+        cursor.RecordFailure(2, "behind");
+
+        Assert.Equal(4, cursor.FurthestOffset);
+        Assert.Null(cursor.FurthestReason);
+
+        // Recording a reason at the actual furthest offset still works afterward
+        cursor.RecordFailure(4, "at-furthest");
+        Assert.Equal("at-furthest", cursor.FurthestReason);
+    }
+
+    [Fact]
     public void Lookahead_Keeps_The_Reason_Of_Its_Parser_When_It_Fails()
     {
         // The parser of Peek is expected where it fails, its reason too

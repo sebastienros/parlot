@@ -101,6 +101,16 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
         //     throw new ParseException(_message, cursor.Position);
         // }
 
+        string? startName = null;
+
+        if (context.IsCompacting)
+        {
+            // A parser which fails moves the cursor back to its start, whose text might have been discarded from the buffer by then.
+            // The line and column are computed from the text, so the position is read while the text is buffered.
+            startName = $"start{context.NextNumber()}";
+            result.Body.Add($"var {startName} = {cursorName}.Position;");
+        }
+
         if (context.DiscardResult)
         {
             result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
@@ -114,7 +124,18 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        ErrorSource.AddReport(result, context, _message, $"{cursorName}.Position", "    ", resetTo: null);
+
+        if (startName != null)
+        {
+            var positionName = $"position{context.NextNumber()}";
+            result.Body.Add($"    var {positionName} = {cursorName}.Offset == {startName}.Offset ? {startName} : {cursorName}.Position;");
+            ErrorSource.AddReport(result, context, _message, positionName, "    ", resetTo: null);
+        }
+        else
+        {
+            ErrorSource.AddReport(result, context, _message, $"{cursorName}.Position", "    ", resetTo: null);
+        }
+
         result.Body.Add("}");
 
         return result;

@@ -27,6 +27,8 @@ public abstract partial class Parser<T> : IParserText
 
     public T? Parse(ParseContext context)
     {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
         context.Scanner.Cursor.ResetFurthestOffset();
 
         var localResult = new ParseResult<T>();
@@ -70,6 +72,8 @@ public abstract partial class Parser<T> : IParserText
     // withReason: whether a failure with a reason returns its error, which computes its position
     private bool TryParse(ParseContext context, out T value, out ParseError? error, bool withReason)
     {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
         error = null;
 
         context.Scanner.Cursor.ResetFurthestOffset();

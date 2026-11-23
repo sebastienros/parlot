@@ -26,8 +26,8 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
 
     public Capture(Parser<T> parser)
     {
-        _parser = parser;
-        _withoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     // It reads only where the parser does, see CustomWhiteSpace

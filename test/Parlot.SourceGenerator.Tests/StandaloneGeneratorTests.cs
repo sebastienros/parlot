@@ -789,6 +789,106 @@ public class StandaloneGeneratorTests
         Assert.Empty(compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity >= DiagnosticSeverity.Warning));
     }
 
+    [Fact]
+    public void Checked_Standalone_Consumer_Handles_Numbers_Hex_Escapes_Longest_And_Streaming()
+    {
+        var declaration = """
+            using System.Collections.Generic;
+            using System.IO;
+            public static partial class Grammar
+            {
+                public static partial bool TryParseNumber(string text, out int value);
+                public static partial bool TryParseHex(string text, out uint value);
+                public static partial bool TryParseEscaped(string text, out string value);
+                public static partial bool TryParseLongest(TextReader reader, out int value);
+                public static partial bool TryParseElseError(TextReader reader, out string value,
+                    out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
+            }
+            """;
+        var grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParseNumber))]
+                private static Parser<int> BuildNumber() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+                [GenerateParser(nameof(TryParseHex))]
+                private static Parser<uint> BuildHex() => Terms.Text("0x").SkipAnd(Literals.Hexadecimal<uint>()).Eof();
+
+                [GenerateParser(nameof(TryParseEscaped))]
+                private static Parser<string> BuildEscaped() => Terms.String(StringLiteralQuotes.Double, StringEscapes.LongUnicode | StringEscapes.Octal | StringEscapes.Hex).Then(static s => s.ToString()).Eof();
+
+                [GenerateParser(nameof(TryParseLongest))]
+                private static Parser<int> BuildLongest() => OneOf(
+                    Longest(
+                        static matches => matches[0].Value > 10 ? -1 : 0,
+                        Literals.Char('a').And(ZeroOrMany(Literals.Char('a'))).Then(static x => 1 + x.Item2.Count),
+                        Literals.Char('b').Then(static _ => 0)).AndSkip(Literals.Char('!')),
+                    ZeroOrMany(Literals.Char('a')).AndSkip(Literals.Char('!')).Then(static list => -list.Count)).Eof();
+
+                [GenerateParser(nameof(TryParseElseError))]
+                private static Parser<string> BuildElseError() => Literals.Text("\n\n  ")
+                    .SkipAnd(ZeroOrMany(Literals.Char('a')).AndSkip(Literals.Char('!')).Then(static _ => "ok").ElseError("expected bang"))
+                    .Eof();
+            }
+            """;
+
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+
+        using var stream = new MemoryStream();
+        var emitted = compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+
+        var assembly = Assembly.Load(stream.ToArray());
+        var type = assembly.GetType("Grammar")!;
+
+        // Numbers with leading '-', '+', empty string (tests unchecked uint casts under checkOverflow: true)
+        var tryParseNumber = type.GetMethod("TryParseNumber")!;
+        foreach (var (input, ok, expected) in new (string, bool, int)[] { ("42", true, 42), ("-7", true, -7), ("", false, 0), ("abc", false, 0) })
+        {
+            object[] args = [input, 0];
+            Assert.Equal(ok, (bool)tryParseNumber.Invoke(null, args)!);
+            Assert.Equal(expected, (int)args[1]);
+        }
+
+        // Hex radix parsing under checkOverflow: true
+        var tryParseHex = type.GetMethod("TryParseHex")!;
+        object[] hexArgs = ["0xDEADbeef", 0u];
+        Assert.True((bool)tryParseHex.Invoke(null, hexArgs)!);
+        Assert.Equal(0xDEADBEEFu, (uint)hexArgs[1]);
+
+        object[] badHexArgs = ["0x ", 0u];
+        Assert.False((bool)tryParseHex.Invoke(null, badHexArgs)!);
+
+        // LongUnicode overflow (\UFFFFFFFF) and octal IsInRange under checkOverflow: true
+        var tryParseEscaped = type.GetMethod("TryParseEscaped")!;
+        object[] okEscaped = ["\"\\U0001F600\\077\\x41\"", null!];
+        Assert.True((bool)tryParseEscaped.Invoke(null, okEscaped)!);
+        Assert.Equal("\U0001F600?A", (string)okEscaped[1]);
+
+        object[] overflowEscaped = ["\"\\UFFFFFFFF\"", null!];
+        Assert.False((bool)tryParseEscaped.Invoke(null, overflowEscaped)!);
+
+        // Compacting Longest with selector returning -1 across >4096-char refill with single-alternative bucket
+        var tryParseLongest = type.GetMethod("TryParseLongest")!;
+        var longInput = new string('a', 5000) + "!";
+        object[] longestArgs = [new StringReader(longInput), 0];
+        Assert.True((bool)tryParseLongest.Invoke(null, longestArgs)!);
+        Assert.Equal(-5000, (int)longestArgs[1]);
+
+        // Compacting ElseError snapshots start position (offset 4, line 3, col 3) before inner parser fails after >4096-char refills
+        var tryParseElseError = type.GetMethod("TryParseElseError")!;
+        var errorInput = "\n\n  " + new string('a', 5000) + "?";
+        object[] errorArgs = [new StringReader(errorInput), null!, null!];
+        Assert.False((bool)tryParseElseError.Invoke(null, errorArgs)!);
+        var errors = (IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)>)errorArgs[2];
+        var diagnostic = Assert.Single(errors);
+        Assert.Equal(("expected bang", false, 4, 3, 3), diagnostic);
+    }
+
     private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
     {
         Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);

@@ -354,6 +354,9 @@ public class ParseContext
         // The white space a choice recorded when the token being read started, see RetryToken
         public long TokenSkippedWhiteSpace;
 
+        // The number of diagnostics recorded when the token being read started, see RetryToken
+        public int TokenDiagnosticCount;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -1057,6 +1060,7 @@ public class ParseContext
         _coldState.TokenRecordedReason = cursor.RecordedReason;
         _coldState.TokenRecordedReasonOffset = cursor.RecordedReasonOffset;
         _coldState.TokenSkippedWhiteSpace = PackSkippedWhiteSpace();
+        _coldState.TokenDiagnosticCount = _coldState.Diagnostics?.Count ?? 0;
 
         return cursor.Offset;
     }
@@ -1071,11 +1075,17 @@ public class ParseContext
             return false;
         }
 
-        // Not a failure: the token is read again, and records its own failures. The ones its parsers recorded so far are
-        // forgotten, like the delimiter of TextBefore which didn't match where the buffer ended.
+        // Not a failure: the token is read again, and records its own failures and diagnostics. The ones its parsers
+        // recorded so far are forgotten, like the delimiter of TextBefore or an unterminated comment at the end of the buffer.
         cursor.ResetPosition(start);
         cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
         cursor.RestoreRecordedReason(_coldState.TokenRecordedReason, _coldState.TokenRecordedReasonOffset);
+
+        if (_coldState.Diagnostics is { } diagnostics && diagnostics.Count > _coldState.TokenDiagnosticCount)
+        {
+            diagnostics.RemoveRange(_coldState.TokenDiagnosticCount, diagnostics.Count - _coldState.TokenDiagnosticCount);
+        }
+
         Refill(start);
         cursor.ResetHitEnd();
 
@@ -1263,7 +1273,7 @@ public class ParseContext
     // Releases the text before the current position when the input is streamed through a compacting buffer, see Commit<T>
     internal void Commit()
     {
-        if ((_flags & CompactingMask) == 0)
+        if ((_flags & CompactingFlag) == 0)
         {
             return;
         }
@@ -1272,7 +1282,10 @@ public class ParseContext
         var offset = Scanner.Cursor.Offset;
         var pins = state.Pins!;
 
-        state.CommitOffset = offset;
+        if (offset > state.CommitOffset)
+        {
+            state.CommitOffset = offset;
+        }
 
         for (var i = 0; i < state.PinCount; i++)
         {

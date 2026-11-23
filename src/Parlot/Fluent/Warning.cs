@@ -17,15 +17,12 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     private readonly Parser<T> _parser;
     private readonly string _message;
 
-    // Whether the parser skipped white space when this one was built, which is where the warning is located
-    private readonly bool _skipWhitespace;
-
     // Whether the white space can't be skipped before the parser, which looks for a new line in it, see SkipsWhiteSpaceFirst
     private LeadingWhiteSpace.ReaderCache? _readsLeadingWhiteSpace;
 
     // The white space is skipped before the parser, to locate the warning, unless the parser reads it, like NoNewLineBefore:
     // the warning is located where the parser is invoked then
-    private bool SkipsWhiteSpaceFirst => _skipWhitespace && !LeadingWhiteSpace.ReadsLeadingWhiteSpace(ref _readsLeadingWhiteSpace, _parser);
+    private bool SkipsWhiteSpaceFirst => SkipWhitespace && !LeadingWhiteSpace.ReadsLeadingWhiteSpace(ref _readsLeadingWhiteSpace, _parser);
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
@@ -45,8 +42,6 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
-
-        _skipWhitespace = _parser is ISeekable { SkipWhitespace: true };
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);

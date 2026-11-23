@@ -27,6 +27,19 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+
+        for (var i = 0; i < _operators.Length; i++)
+        {
+            if (_operators[i].Op is null)
+            {
+                throw new ArgumentException("Operators must not contain null parsers.", nameof(operators));
+            }
+
+            if (_operators[i].Factory is null)
+            {
+                throw new ArgumentException("Operators must not contain null factories.", nameof(operators));
+            }
+        }
     }
 
     // The hints of the operators and of the operand, any of which can read first. They are read when they are asked for since
@@ -232,6 +245,19 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
         if (_operators.Length == 0)
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
+        }
+
+        for (var i = 0; i < _operators.Length; i++)
+        {
+            if (_operators[i].Op is null)
+            {
+                throw new ArgumentException("Operators must not contain null parsers.", nameof(operators));
+            }
+
+            if (_operators[i].Factory is null)
+            {
+                throw new ArgumentException("Operators must not contain null factories.", nameof(operators));
+            }
         }
     }
 

@@ -179,9 +179,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3> : Parser<ValueTuple<T1, T3>>, IS
         Parser<T3> lastParser
         )
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
@@ -348,9 +348,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
 
     public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> lastParser)
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
@@ -519,9 +519,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
 
     public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> lastParser)
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
@@ -700,9 +700,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
     public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> lastParser)
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
@@ -882,9 +882,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
     public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
@@ -1065,9 +1065,9 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
     public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> parser, Parser<T8> lastParser)
     {
-        _parser = parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _parserWithoutValue = _parser.CanParseWithoutValue;
         _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 

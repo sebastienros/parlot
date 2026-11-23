@@ -28,6 +28,8 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
     private const int DefaultBufferSize = 4096;
 
     private char[] _chars = Array.Empty<char>();
+    private char _pendingChar;
+    private bool _hasPendingChar;
 
 #if !PARLOT_STANDALONE
     /// <param name="reader">The reader.</param>
@@ -119,6 +121,12 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
 
         if (keep >= _maxBufferedCharacters)
         {
+            // When the buffer is already at the limit, the input might end right here (not yet marked final).
+            if (keep == _maxBufferedCharacters && TryMarkFinalAtLimit(cursor, floor, keepStart, cancellationToken))
+            {
+                return;
+            }
+
             throw new ParseException($"The input requires more than {_maxBufferedCharacters} buffered characters to be parsed.", cursor.Position);
         }
 
@@ -137,17 +145,45 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
     /// </summary>
     public int PeakBufferedCharacters { get; private set; }
 
+    private bool TryMarkFinalAtLimit(Cursor cursor, int floor, int keepStart, CancellationToken cancellationToken)
+    {
+        if (_hasPendingChar)
+        {
+            return false;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_chars.Length == 0)
+        {
+            _chars = ArrayPool<char>.Shared.Rent(1);
+        }
+
+#if PARLOT_STANDALONE
+        var read = _reader.Read(_chars, 0, 1);
+#else
+        var read = _readAsynchronously ? ReadBlocking(0, 1, cancellationToken) : _reader.Read(_chars, 0, 1);
+#endif
+
+        if (read == 0)
+        {
+            var text = keepStart == 0 ? cursor.Buffer : cursor.Buffer.Substring(keepStart);
+            cursor.ReplaceBuffer(text, floor, isFinal: true);
+            return true;
+        }
+
+        _pendingChar = _chars[0];
+        _hasPendingChar = true;
+        return false;
+    }
+
     private string Read(string? retained, int retainedStart, int retainedLength, CancellationToken cancellationToken, out bool isFinal)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         // Read at least as much as is retained so that copying the retained text costs O(1) per char read
-        var target = retainedLength + Math.Max(retainedLength, _bufferSize);
-
-        if (target < 0 || target > _maxBufferedCharacters)
-        {
-            target = _maxBufferedCharacters;
-        }
+        var targetLong = (long)retainedLength + Math.Max(retainedLength, _bufferSize);
+        var target = targetLong > _maxBufferedCharacters ? _maxBufferedCharacters : (int)targetLong;
 
         if (_chars.Length < target)
         {
@@ -159,6 +195,12 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
 
         var length = retainedLength;
         isFinal = false;
+
+        if (_hasPendingChar && length < target)
+        {
+            _chars[length++] = _pendingChar;
+            _hasPendingChar = false;
+        }
 
         while (length < target)
         {
