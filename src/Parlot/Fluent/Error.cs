@@ -179,68 +179,10 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
-    {
-        context.EnterParser(this);
-
-        var start = context.Scanner.Cursor.Offset;
-
-        if (_parser.Parse(context, ref result))
-        {
-            context.ExitParser(this);
-
-            if (context.CollectDiagnostics)
-            {
-                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
-                context.Scanner.Cursor.ResetPosition(start);
-                return false;
-            }
-
-            throw new ParseException(_message, context.Scanner.Cursor.Position);
-        }
-
-        context.ExitParser(this);
-        return false;
-    }
+        => ErrorSource.ParseError(this, _parser, _message, context);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable sourceable)
-        {
-            throw new NotSupportedException("Error requires a source-generatable parser.");
-        }
-
-        var result = context.CreateResult(typeof(T));
-        var cursorName = context.CursorName;
-        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-
-        // Use helper instead of inlining
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
-
-        // if (Helper(context, out _))
-        // {
-        //     throw new ParseException(_message, cursor.Position);
-        // }
-        // success = false;
-
-        string? startName = null;
-
-        if (context.CollectDiagnostics)
-        {
-            startName = $"start{context.NextNumber()}";
-            result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        }
-
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
-        result.Body.Add("{");
-        ErrorSource.AddReport(result, context, _message, $"{cursorName}.Position", "    ", startName);
-        result.Body.Add("}");
-
-        return result;
-    }
+        => ErrorSource.GenerateErrorSource(_parser, typeof(T), typeof(T), _message, context);
 
     public override string ToString() => FormatOnce($"{_parser} (Error)");
 }
@@ -276,53 +218,57 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
-    {
-        context.EnterParser(this);
+        => ErrorSource.ParseError(this, _parser, _message, context);
 
-        var parsed = new ParseResult<T>();
+    public SourceResult GenerateSource(SourceGenerationContext context)
+        => ErrorSource.GenerateErrorSource(_parser, typeof(T), typeof(U), _message, context);
+
+    public override string ToString() => FormatOnce($"{_parser} (Error)");
+}
+
+internal static class ErrorSource
+{
+    internal static bool ParseError<TInner, TResult>(Parser<TResult> owner, Parser<TInner> inner, string message, ParseContext context)
+    {
+        context.EnterParser(owner);
+
+        var parsed = new ParseResult<TInner>();
         var start = context.Scanner.Cursor.Offset;
 
-        if (_parser.Parse(context, ref parsed))
+        if (inner.CanParseWithoutValue ? inner.ParseWithoutValue(context, ref parsed) : inner.Parse(context, ref parsed))
         {
-            context.ExitParser(this);
+            context.ExitParser(owner);
 
             if (context.CollectDiagnostics)
             {
-                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
+                context.AddDiagnostic(message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
                 context.Scanner.Cursor.ResetPosition(start);
                 return false;
             }
 
-            throw new ParseException(_message, context.Scanner.Cursor.Position);
+            throw new ParseException(message, context.Scanner.Cursor.Position);
         }
 
-        context.ExitParser(this);
+        context.ExitParser(owner);
         return false;
     }
 
-    public SourceResult GenerateSource(SourceGenerationContext context)
+    internal static SourceResult GenerateErrorSource(object inner, Type innerType, Type resultType, string message, SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        if (_parser is not ISourceable sourceable)
+        if (inner is not ISourceable sourceable)
         {
-            throw new NotSupportedException("Error requires a source-generatable parser.");
+            throw new NotSupportedException($"Error requires a source-generatable parser, but {SourceGenerationContext.DescribeParser(inner)} does not implement ISourceable.");
         }
 
-        var result = context.CreateResult(typeof(U));
+        var result = context.CreateResult(resultType);
         var cursorName = context.CursorName;
-        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(innerType);
 
-        // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
-
-        // if (Helper(context, out _))
-        // {
-        //     throw new ParseException(_message, cursor.Position);
-        // }
-        // success = false;
+            .MethodName);
 
         string? startName = null;
 
@@ -334,17 +280,11 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
 
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        ErrorSource.AddReport(result, context, _message, $"{cursorName}.Position", "    ", startName);
+        AddReport(result, context, message, $"{cursorName}.Position", "    ", startName);
         result.Body.Add("}");
 
         return result;
     }
-
-    public override string ToString() => FormatOnce($"{_parser} (Error)");
-}
-
-internal static class ErrorSource
-{
     // Emits the code reporting an error: it throws, or records it when the diagnostics are collected and the parser fails.
     // resetTo is the variable holding the offset the cursor is moved back to when the error is recorded.
     internal static void AddReport(SourceResult result, SourceGenerationContext context, string message, string position, string indent, string? resetTo)

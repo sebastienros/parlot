@@ -494,6 +494,49 @@ public class GrammarAnalyzerTests
         Assert.Equal(12, expression.Parse("((12))"));
     }
 
+    [Fact]
+    public void ShadowedValuedOperatorInPrecedenceTableIsReported()
+    {
+        var parser = Terms.Integer().Operators()
+            .LeftAssociative(
+                [Terms.Text("<"), Terms.Text("<=")],
+                static (long a, long b, string _) => a);
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.ShadowedAlternative);
+        Assert.Contains("Terms.Text(\"<=\")", finding.Message);
+    }
+
+    [Fact]
+    public void CommitAndSeekableAndWithStateAreTransparentForAnalysis()
+    {
+        var shadowed = Terms.Text("<").Commit().Or(Terms.Text("<="));
+        Single(GrammarAnalyzer.Analyze(shadowed), GrammarRule.ShadowedAlternative);
+
+        var unreachable = Terms.Text("a").Else("").Commit().Or(Terms.Text("b"));
+        Single(GrammarAnalyzer.Analyze(unreachable), GrammarRule.UnreachableAlternative);
+
+        var seekableShadowed = Terms.Text("<").Lookup((Parlot.Rewriting.ISeekable)Terms.Text("<")).Or(Terms.Text("<="));
+        Single(GrammarAnalyzer.Analyze(seekableShadowed), GrammarRule.ShadowedAlternative);
+
+        var warningUnreachable = Terms.Text("a").Else("").Warning("warn").Or(Terms.Text("b"));
+        Single(GrammarAnalyzer.Analyze(warningUnreachable), GrammarRule.UnreachableAlternative);
+
+        var eofShadowed = Terms.Text("a").Or(Terms.Text("a").Eof());
+        Single(GrammarAnalyzer.Analyze(eofShadowed), GrammarRule.ShadowedAlternative);
+    }
+
+    [Fact]
+    public void RadixNumberAndCodePointIdentifierUseCanonicalDescriptions()
+    {
+        var hex = Terms.Hexadecimal<long>();
+        var hexFinding = Single(GrammarAnalyzer.Analyze(hex.Or(hex)), GrammarRule.ShadowedAlternative);
+        Assert.Contains("Terms.Number(...)", hexFinding.Message);
+
+        var ident = Terms.Identifier(static cp => cp == 'a', static cp => cp == 'a', IdentifierOptions.JavaScript);
+        var identFinding = Single(GrammarAnalyzer.Analyze(ident.Or(ident)), GrammarRule.ShadowedAlternative);
+        Assert.Contains("Terms.Identifier(...)", identFinding.Message);
+    }
+
     // The choice with the alternatives of a choice in the order of a fix
     private static Parser<T> Reorder<T>(Parser<T> choice, GrammarFix fix)
     {

@@ -193,7 +193,9 @@ public class SourceableParsersTests
     {
         var number = Literals.Number<decimal>(NumberOptions.Any).Then(static x => x.ToString(CultureInfo.InvariantCulture));
         var choice = OneOf(number, Literals.Text("x"));
-        var generated = string.Join(Environment.NewLine, Generate(choice).Body);
+        // Span code would inline the 2-branch choice; disable it to inspect the OneOf switch table
+        var context = new SourceGenerationContext { GenerateSpanCode = false };
+        var generated = string.Join(Environment.NewLine, Assert.IsAssignableFrom<ISourceable>(choice).GenerateSource(context).Body);
 
         foreach (var c in "0123456789+-.x")
         {

@@ -96,56 +96,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser1 is not ISourceable parser1 || _parser2 is not ISourceable parser2)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(T1), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(T1));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helper1 = Helper(parser1, typeof(T1), "P1");
-        var helper2 = context.WithDiscardResult(true, () => Helper(parser2, typeof(T2), "P2"));
-
-        var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
-        result.Body.Add($"if ({helper1}({context.ParseContextName}, out {outTarget}))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helper2}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(T1), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser1, _parser2);
 
@@ -255,57 +206,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T3), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
@@ -414,57 +315,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2, T3>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T4), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2, T3>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
@@ -573,57 +424,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2, T3, T4>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T5), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2, T3, T4>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
@@ -734,57 +535,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T6), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2, T3, T4, T5>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
@@ -895,57 +646,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T7), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hpValue.Item6);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
@@ -1058,57 +759,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
-        {
-            throw new NotSupportedException("SequenceAndSkip requires source-generatable parsers.");
-        }
-
-        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), context) is { } spanResult)
-        {
-            return spanResult;
-        }
-
-        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
-        var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
-        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
-
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        string Helper(ISourceable p, Type valueType, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
-            return context.Helpers
-                .GetOrCreate(p, $"{context.MethodNamePrefix}_SequenceAndSkip_{suffix}", valueTypeName, () => p.GenerateSource(context))
-                .MethodName;
-        }
-
-        var helperParser = Helper(parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), "Parser");
-        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, typeof(T8), "Last"));
-
-        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hpValue.Item6, hpValue.Item7);");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-
-        return result;
-    }
+        => SequenceSource.Generate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), "SequenceAndSkip", context);
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 

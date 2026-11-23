@@ -7,7 +7,7 @@ using System.Numerics;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
+public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
@@ -127,52 +127,75 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var resetName = $"reset{context.NextNumber()}";
-        var startName = $"start{context.NextNumber()}";
         var numberSpanName = $"numberSpan{context.NextNumber()}";
-        var endName = $"end{context.NextNumber()}";
-        var parsedValueName = $"parsedValue{context.NextNumber()}";
 
-        result.Body.Add($"var {resetName} = 0;");
-        result.Body.Add($"var {startName} = 0;");
-        result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
-        }
-
-        result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{resetName} = {cursorName}.Offset;");
-        result.Body.Add($"{startName} = {resetName};");
+        result.Body.Add($"var {resetName} = {cursorName}.Offset;");
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
         var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
         var allowExponent = _allowExponent ? "true" : "false";
 
-        // Emit NumberStyles as a literal cast
+        var (tryParseMethod, numberStylesExpr, cultureExpr, downlevel) = GetParseExpressions(context);
+
+        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
+        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
+        var allowUnderscore = _allowUnderscore ? "true" : "false";
+        var requireFractionalPartForDecimals = _requireFractionalPartForDecimals ? "true" : "false";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}, {requireFractionalPartForDecimals}, out var {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        result.Body.Add("{");
+        if (_allowUnderscore)
+        {
+            result.Body.Add($"    {numberSpanName} = global::Parlot.Numbers.RemoveUnderscores({numberSpanName});");
+        }
+
+        var outTarget = context.DiscardResult ? (downlevel ? $"{valueTypeName} _" : "_") : result.ValueVariable;
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({resetName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 8;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var (tryParseMethod, numberStylesExpr, cultureExpr, _) = GetParseExpressions(writer.Context);
+
+        NumberSource.GenerateSpanSource(writer, valueVariable, fail, typeof(T), tryParseMethod, numberStylesExpr, cultureExpr,
+            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals,
+            _decimalSeparator, _groupSeparator);
+    }
+
+    private (SourceGenerationContext Context, string TryParseMethod, string NumberStylesExpr, string CultureExpr, bool Downlevel)? _parseExpressions;
+
+    private (string TryParseMethod, string NumberStylesExpr, string CultureExpr, bool Downlevel) GetParseExpressions(SourceGenerationContext context)
+    {
+        if (_parseExpressions is { } expressions && ReferenceEquals(expressions.Context, context))
+        {
+            return (expressions.TryParseMethod, expressions.NumberStylesExpr, expressions.CultureExpr, expressions.Downlevel);
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
 
-        var cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat";
+        var cultureExpr = "global::System.Globalization.NumberFormatInfo.InvariantInfo";
         if (!ReferenceEquals(_culture, CultureInfo.InvariantCulture.NumberFormat))
         {
             var decimalSeparator = $"((char){(int)_decimalSeparator}).ToString()";
             var groupSeparator = $"((char){(int)_groupSeparator}).ToString()";
             cultureExpr = context.RegisterStaticField(
                 "private static readonly global::System.Globalization.NumberFormatInfo",
-                $"new global::System.Func<global::System.Globalization.NumberFormatInfo>(() => {{ var c = (global::System.Globalization.NumberFormatInfo)global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat.Clone(); c.NumberDecimalSeparator = {decimalSeparator}; c.NumberGroupSeparator = {groupSeparator}; return c; }})()");
+                $"new global::System.Func<global::System.Globalization.NumberFormatInfo>(() => {{ var c = (global::System.Globalization.NumberFormatInfo)global::System.Globalization.NumberFormatInfo.InvariantInfo.Clone(); c.NumberDecimalSeparator = {decimalSeparator}; c.NumberGroupSeparator = {groupSeparator}; return c; }})()");
         }
 
-        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
-        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        var allowUnderscore = _allowUnderscore ? "true" : "false";
-        var requireFractionalPartForDecimals = _requireFractionalPartForDecimals ? "true" : "false";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}, {requireFractionalPartForDecimals}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
-        result.Body.Add("{");
-        if (_allowUnderscore)
-        {
-            result.Body.Add($"    {numberSpanName} = global::Parlot.Numbers.RemoveUnderscores({numberSpanName});");
-        }
-        var outTarget = context.DiscardResult ? "_" : parsedValueName;
         // The generic helper needs the consumer's net8.0+ runtime and C# 11; other consumers only have the fixed
         // overloads. An unknown target keeps the generic path this build was compiled for.
         var downlevel = !context.SupportsStaticAbstractMembers || context.TargetFramework.Identifier switch
@@ -186,22 +209,9 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
             : Numbers.HasTryParseOverload(typeof(T))
                 ? "global::Parlot.Numbers.TryParse"
                 : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later and C# 11 or later.");
-        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-        }
-        result.Body.Add("    }");
-        result.Body.Add("}");
 
-        result.Body.Add($"if (!{result.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
-        result.Body.Add("}");
-
-        return result;
+        _parseExpressions = (context, tryParseMethod, numberStylesExpr, cultureExpr, downlevel);
+        return (tryParseMethod, numberStylesExpr, cultureExpr, downlevel);
     }
 }
 #endif

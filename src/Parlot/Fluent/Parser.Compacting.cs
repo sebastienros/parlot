@@ -107,12 +107,7 @@ public abstract partial class Parser<T>
     private static ParseContext CreateCompactingContext(TextReaderRefillSource source, string text, bool isFinal, StreamParseOptions options, CancellationToken cancellationToken)
     {
         var scanner = new Scanner(text, isFinal);
-        var context = options.ContextFactory?.Invoke(scanner, cancellationToken) ?? new ParseContext(scanner, cancellationToken);
-
-        if (context.Scanner != scanner)
-        {
-            throw new InvalidOperationException("The ContextFactory must return a context using the provided scanner.");
-        }
+        var context = options.CreateContext(scanner, cancellationToken);
 
         if (!isFinal)
         {

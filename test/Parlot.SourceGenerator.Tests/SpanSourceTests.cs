@@ -507,6 +507,33 @@ public class SpanSourceTests
         Assert.DoesNotMatch(@"cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+context\.SkipWhiteSpace\(\);", body.Substring(first.Length));
     }
 
+    [Fact]
+    public void SearchValues_And_GenericNumberLiteral_Generate_Span_Code()
+    {
+        var context = new SourceGenerationContext();
+        var searchValuesBody = Generate(Literals.AnyOf("abc").And(Literals.Char('!')), context);
+        Assert.Contains("AdvanceWithinBuffer(pos", searchValuesBody, StringComparison.Ordinal);
+
+        var numberBody = Generate(new NumberLiteral<int>().And(Literals.Char('!')), new SourceGenerationContext());
+        Assert.Contains("ScanDecimal(", numberBody, StringComparison.Ordinal);
+        Assert.Contains("AdvanceWithinBuffer(pos", numberBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SequenceAndSkip_Arity3_Respects_DiscardResult()
+    {
+        var context = new SourceGenerationContext { DiscardResult = true, GenerateSpanCode = false };
+        var seq3 = Terms.Char('a')
+            .And(Terms.Char('b'))
+            .AndSkip(Terms.Char('c'));
+        var body = Generate(seq3, context);
+
+        // Both helper calls discard their out value and no tuple value is constructed
+        Assert.Contains("out _)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("h1Value", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("h2Value", body, StringComparison.Ordinal);
+    }
+
     private static string Generate<T>(Parser<T> parser, SourceGenerationContext context) =>
         string.Join("\n", Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context).Body);
 
