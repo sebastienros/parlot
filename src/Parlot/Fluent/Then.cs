@@ -117,13 +117,11 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
         var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
-        // Register helper for the inner parser
+        // Register helper for the inner parser only when it will actually be called
         var helperKey = $"{context.MethodNamePrefix}_Then_{context.NextNumber()}";
         // Callbacks consume the inner value even when their output is discarded; constants do not.
         var discardInput = _action1 == null && _action2 == null && _action3 == null;
-        var helperName = context.WithDiscardResult(discardInput, () => context.Helpers
-            .GetOrCreate(sourceable, helperKey, parsedTypeName, () => sourceable.GenerateSource(context))
-            .MethodName);
+        string? helperName = null;
 
         var outTarget = discardInput ? "_" : $"var {parsedName}Value";
         var cursorName = context.CursorName;
@@ -139,19 +137,11 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
             // which starts by skipping white space, like a choice of Terms parsers, then finds none.
             startName = $"start{context.NextNumber()}";
 
-            object content = _parser;
-
-            if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
-            {
-                content = contentSourceable;
-                helperName = context.Helpers
-                    .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
-                    .MethodName;
-            }
+            var contentSourceable = _parser is SkipWhiteSpace<T> { Parser: ISourceable unfolded } ? unfolded : sourceable;
 
             // A sequence which can start by matching nothing starts where the content of its next part does, so it is
             // emitted part by part, and gives back the white space skipped before a part when it fails
-            var sequenceSource = SequenceStartSource.Create(context, content);
+            var sequenceSource = SequenceStartSource.Create(context, contentSourceable);
 
             // A parser which reads from where it is invoked, like a capture or a lookahead, is invoked there, and
             // starts there
@@ -178,6 +168,18 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
                 sequenceSuccessName = $"matched{context.NextNumber()}";
                 sequenceSource.Generate(result.Body, typeof(T), startName, sequenceSuccessName, $"{parsedName}Value");
             }
+            else
+            {
+                helperName = context.WithDiscardResult(false, () => context.Helpers
+                    .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
+                    .MethodName);
+            }
+        }
+        else
+        {
+            helperName = context.WithDiscardResult(discardInput, () => context.Helpers
+                .GetOrCreate(sourceable, helperKey, parsedTypeName, () => sourceable.GenerateSource(context))
+                .MethodName);
         }
 
         result.Body.Add(sequenceSuccessName != null ? $"if ({sequenceSuccessName})" : $"if ({helperName}({ctx}, out {outTarget}))");

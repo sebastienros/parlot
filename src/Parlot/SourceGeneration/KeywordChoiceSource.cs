@@ -25,21 +25,23 @@ internal static class KeywordChoiceSource
             body.Add($"{context.ParseContextName}.SkipWhiteSpace();");
         }
 
+        var maxLen = keywords.Max(static text => text.Length);
         body.Add($"var keywordInput = {cursor}.Span;");
+        body.Add($"var keywordLimit = keywordInput.Length > {maxLen} ? keywordInput.Slice(0, {maxLen + 1}) : keywordInput;");
         body.Add("var length = 0;");
         // An overlong identifier cannot match. Do not scan an unbounded unknown token.
         if (first!.HasCustomIdentifierPart)
         {
-            body.Add($"while (length < keywordInput.Length && length <= {keywords.Max(static text => text.Length)})");
+            body.Add("while (length < keywordLimit.Length)");
             body.Add("{");
-            body.Add("    var keywordNext = keywordInput[length];");
+            body.Add("    var keywordNext = keywordLimit[length];");
             body.Add($"    if (!{first.GenerateIsIdentifierPart("keywordNext")}) break;");
             body.Add("    length++;");
             body.Add("}");
         }
         else
         {
-            body.Add($"while (length < keywordInput.Length && length <= {keywords.Max(static text => text.Length)} && unchecked((uint)((keywordInput[length] | 0x20) - 'a')) <= 'z' - 'a')");
+            body.Add("while (length < keywordLimit.Length && unchecked((uint)((keywordLimit[length] | 0x20) - 'a')) <= 'z' - 'a')");
             body.Add("{");
             body.Add("    length++;");
             body.Add("}");
@@ -47,7 +49,7 @@ internal static class KeywordChoiceSource
 
         // The word could continue after the end of a partial buffer.
         body.Add($"if (length == keywordInput.Length) {cursor}.MarkHitEnd();");
-        body.Add("var keyword = MatchKeyword(keywordInput.Slice(0, length));");
+        body.Add("var keyword = MatchKeyword(keywordLimit.Slice(0, length));");
         body.Add("if (keyword != null)");
         body.Add("{");
         body.Add($"    {cursor}.AdvanceNoNewLines(length);");
@@ -61,7 +63,7 @@ internal static class KeywordChoiceSource
 
         body.Add("value = default;");
         body.Add("return false;");
-        body.Add("static string MatchKeyword(System.ReadOnlySpan<char> input)");
+        body.Add("static string MatchKeyword(global::System.ReadOnlySpan<char> input)");
         body.Add("{");
         body.Add(KnownStringLookup.Generate(keywords, bytes: false, ignoreCase: first.Comparison == StringComparison.OrdinalIgnoreCase,
             matchExpression: index => LiteralHelper.StringToLiteral(keywords[index]), failureExpression: "null", resultType: "string"));

@@ -46,16 +46,27 @@ internal static class ListBuilderSource
     /// The value of <paramref name="result"/> is only set when there is a first item, its default value is the empty list.
     /// </remarks>
     public static void EmitFirstItemThenRest(SourceGenerationContext context, SourceResult result, string helperName, string elementTypeName, int max)
+        => EmitFirstItemThenRest(context, result, helperName, helperName, elementTypeName, max);
+
+    public static void EmitFirstItemThenRest(SourceGenerationContext context, SourceResult result, string firstHelperName, string nextHelperName, string elementTypeName, int max)
     {
         var ctx = context.ParseContextName;
         var cursor = context.CursorName;
         var previousOffset = $"previousOffset{context.NextNumber()}";
         var first = $"first{context.NextNumber()}";
-        var rest = $"listRest{context.NextNumber()}";
 
         result.Body.Add($"var {previousOffset} = {cursor}.Offset;");
-        result.Body.Add($"if ({helperName}({ctx}, out var {first}) && {cursor}.Offset != {previousOffset})");
+        result.Body.Add($"if ({firstHelperName}({ctx}, out var {first}) && {cursor}.Offset != {previousOffset})");
         result.Body.Add("{");
+        if (max == 1)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new {elementTypeName}[] {{ {first} }};");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+            return;
+        }
+
+        var rest = $"listRest{context.NextNumber()}";
         result.Body.Add($"    {result.ValueVariable} = {rest}({ctx}, {first});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
@@ -75,7 +86,7 @@ internal static class ListBuilderSource
             $"        {loop}\n" +
             "        {\n" +
             $"            var previousOffset = {cursor}.Offset;\n" +
-            $"            if (!{helperName}({ctx}, out var item) || {cursor}.Offset == previousOffset)\n" +
+            $"            if (!{nextHelperName}({ctx}, out var item) || {cursor}.Offset == previousOffset)\n" +
             "            {\n" +
             "                break;\n" +
             "            }\n" +

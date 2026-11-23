@@ -168,6 +168,16 @@ public sealed class SourceGenerationContext
     public bool CollectDiagnostics { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the generated parser can be cancelled via a <see cref="System.Threading.CancellationToken"/>.
+    /// When <see langword="false"/>, generated methods omit <c>context.CheckCancellation()</c> calls.
+    /// </summary>
+    public bool SupportsCancellation { get; set; } = true;
+
+    // Set by WithWhiteSpaceParser when a custom whitespace parser can reach a Deferred parser before reading,
+    // so the generator conservatively keeps left-recursion tracking on all Deferred parsers.
+    internal bool HasReentrantWhiteSpaceParser { get; set; }
+
+    /// <summary>
     /// Gets or sets the maximum number of nested recursive parser invocations of the generated parser, or <c>0</c> for no
     /// limit, like <c>ParseContext.MaxRecursionDepth</c>.
     /// </summary>

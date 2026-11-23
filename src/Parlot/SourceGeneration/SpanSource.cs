@@ -137,19 +137,30 @@ internal sealed class SpanSourceWriter
     private readonly IList<string> _locals;
     private readonly IList<string> _body;
     private readonly List<int> _records = new();
+    private readonly List<string> _localFunctions;
+    private readonly string _spanStart;
+    private readonly bool _movedIsParameter;
+    private bool _usesSpanStart;
     private string? _recorded;
     private int _whiteSpaceSkippedAt = -1;
 
     public SpanSourceWriter(SourceGenerationContext context, IList<string> locals, IList<string> body)
+        : this(context, locals, body, new List<string>(), movedIsParameter: false)
+    {
+    }
+
+    private SpanSourceWriter(SourceGenerationContext context, IList<string> locals, IList<string> body, List<string> localFunctions, bool movedIsParameter)
     {
         Context = context;
         _locals = locals;
         _body = body;
+        _localFunctions = localFunctions;
+        _movedIsParameter = movedIsParameter;
 
         var number = context.NextNumber();
         Span = $"span{number}";
         Pos = $"pos{number}";
-        SpanStart = $"spanStart{number}";
+        _spanStart = $"spanStart{number}";
     }
 
     public SourceGenerationContext Context { get; }
@@ -159,6 +170,40 @@ internal sealed class SpanSourceWriter
     /// when the span code doesn't skip white space.
     /// </summary>
     public string? Moved { get; private set; }
+
+    /// <summary>
+    /// Ensures <see cref="Moved"/> is declared and returns its name.
+    /// </summary>
+    public string EnsureMoved() => Moved ??= _movedIsParameter ? $"moved{Context.NextNumber()}" : DeclareLocal("bool", "moved", "false");
+
+    /// <summary>
+    /// Whether <see cref="SpanStart"/> was referenced by the generated span code.
+    /// </summary>
+    public bool UsesSpanStart => Moved != null || _usesSpanStart;
+
+    /// <summary>
+    /// Whether any failure records were emitted in this writer.
+    /// </summary>
+    public bool HasRecords => _records.Count > 0;
+
+    /// <summary>
+    /// Local functions emitted at the end of the span block.
+    /// </summary>
+    public IReadOnlyList<string> LocalFunctions => _localFunctions;
+
+    /// <summary>
+    /// Adds a local function to be emitted at the end of the enclosing span block.
+    /// </summary>
+    public void AddLocalFunction(string code) => _localFunctions.Add(code);
+
+    /// <summary>
+    /// Creates a child writer for a local function emitted inside the same span block.
+    /// </summary>
+    public SpanSourceWriter CreateChild(IList<string> locals, IList<string> body) =>
+        new(Context, locals, body, _localFunctions, movedIsParameter: true)
+        {
+            AfterMatch = AfterMatch,
+        };
 
     /// <summary>
     /// Whether the code being emitted can run after the position was moved back from a match, like the alternatives of
@@ -179,8 +224,19 @@ internal sealed class SpanSourceWriter
 
     /// <summary>
     /// The name of the <c>int</c> local holding the absolute offset of the first char of <see cref="Span"/>.
+    /// Accessing this property marks <see cref="UsesSpanStart"/>.
     /// </summary>
-    public string SpanStart { get; }
+    public string SpanStart
+    {
+        get
+        {
+            _usesSpanStart = true;
+            return _spanStart;
+        }
+    }
+
+    // Internal access without marking _usesSpanStart, for declarations and replaceable failure records.
+    internal string RawSpanStart => _spanStart;
 
     public string Cursor => Context.CursorName;
 
@@ -275,7 +331,7 @@ internal sealed class SpanSourceWriter
         if (afterReading != label && afterReading.IsTarget)
         {
             _records.Add(_body.Count);
-            Add($"{afterReading.Name}: if ({Pos} > {start}) {Cursor}.RecordFailure({SpanStart} + {Pos});");
+            Add($"{afterReading.Name}: if ({Pos} > {start}) {Cursor}.RecordFailure({_spanStart} + {Pos});");
 
             if (!label.IsTarget)
             {
@@ -306,7 +362,7 @@ internal sealed class SpanSourceWriter
 
         foreach (var index in _records)
         {
-            _body[index] = _body[index].Replace($"{Cursor}.RecordFailure({SpanStart} + {Pos});", $"{Cursor}.RecordFailure({Cursor}.Offset + {Pos});");
+            _body[index] = _body[index].Replace($"{Cursor}.RecordFailure({_spanStart} + {Pos});", $"{Cursor}.RecordFailure({Cursor}.Offset + {Pos});");
         }
     }
 
@@ -347,11 +403,15 @@ internal sealed class SpanSourceWriter
     /// </returns>
     public SpanLabel SkipWhiteSpace(SpanLabel fail)
     {
-        // Nothing was emitted since the white space was skipped: the label itself, so that the first check of an
-        // alternative of a choice of tokens, its hot path, doesn't go through the label which compares the position
-        var skipped = _whiteSpaceSkippedAt == _body.Count;
+        // Nothing was emitted since the white space was skipped by an enclosing choice: skip the redundant check and
+        // return the label itself, so the first check of an alternative doesn't go through the failure-recording label.
+        if (_whiteSpaceSkippedAt == _body.Count)
+        {
+            return fail;
+        }
+
         var ctx = Context.ParseContextName;
-        Moved ??= DeclareLocal("bool", "moved", "false");
+        var moved = EnsureMoved();
 
         // The check of ParseContext.MaySkipWhiteSpace, with the constant mask of the default set first like SkipWhiteSpace.
         // There is no white space at the end of the span.
@@ -372,10 +432,10 @@ internal sealed class SpanSourceWriter
 
         Add($"{ctx}.SkipWhiteSpace();");
         Add($"{Pos} = {Cursor}.Offset - {SpanStart};");
-        Add($"{Moved} = true;");
+        Add($"{moved} = true;");
         EndBlock();
 
-        return skipped ? fail : fail.AfterWhiteSpace;
+        return fail.AfterWhiteSpace;
     }
 
     /// <summary>
@@ -457,7 +517,7 @@ internal static class SpanSource
         var fail = writer.NewFailureLabel("fail", movesCursorBack: true);
 
         writer.Add($"var {writer.Span} = {cursor}.Span;");
-        writer.Add($"var {writer.SpanStart} = {cursor}.Offset;");
+        var spanStartIndex = result.Body.Count;
         writer.Add($"var {writer.Pos} = 0;");
 
         writer.Generate(parser, context.DiscardResult ? null : result.ValueVariable, fail);
@@ -488,6 +548,16 @@ internal static class SpanSource
         }
 
         writer.ReadRecordedStartFromCursor();
+
+        if (writer.UsesSpanStart)
+        {
+            result.Body.Insert(spanStartIndex, $"var {writer.RawSpanStart} = {cursor}.Offset;");
+        }
+
+        foreach (var localFunction in writer.LocalFunctions)
+        {
+            result.Body.Add(localFunction);
+        }
 
         return result;
     }
@@ -538,63 +608,192 @@ internal static class SpanSource
     internal static void GenerateLoop(SpanSourceWriter writer, object parser, Type elementType, int max, bool oneOrMore, string? valueVariable, SpanLabel fail)
     {
         var elementTypeName = SourceGenerationContext.GetTypeName(elementType);
-        var count = writer.DeclareLocal("int", "count", "0");
-        var itemStart = writer.DeclareLocal("int", "itemStart", "0");
-        var list = valueVariable != null ? writer.DeclareLocal($"global::Parlot.Fluent.ListBuilder<{elementTypeName}>", "list") : null;
-        var item = valueVariable != null ? writer.DeclareLocal(elementType, "item") : null;
-        var itemFail = writer.NewFailureLabel("itemFail");
         var pos = writer.Pos;
+        var ctx = writer.Context.ParseContextName;
 
-        // The locals are declared at the start of the method, and a loop can run several times in an enclosing loop
-        writer.Add($"{count} = 0;");
-
-        // The items of a long list are on the scratch stack of the thread, which an exception mustn't leave them on
-        if (list != null)
+        if (valueVariable == null)
         {
-            writer.Add($"{list} = default;");
-            writer.BeginBlock("try");
+            var needsCount = max > 0 || oneOrMore;
+            var count = needsCount ? writer.DeclareLocal("int", "count", "0") : null;
+            var itemStart = writer.DeclareLocal("int", "itemStart", "0");
+            var itemFail = writer.NewFailureLabel("itemFail");
+
+            // The locals are declared at the start of the method, and a loop can run several times in an enclosing loop
+            if (needsCount)
+            {
+                writer.Add($"{count} = 0;");
+            }
+
+            writer.BeginBlock(max > 0 ? $"while ({count} < {max})" : "while (true)");
+
+            // Cancellation is checked for each element, like when each one was a helper method: the loop is the only part of
+            // span code whose length depends on the input
+            if (writer.Context.SupportsCancellation)
+            {
+                writer.Add($"{ctx}.CheckCancellation();");
+            }
+
+            writer.Add($"{itemStart} = {pos};");
+            writer.Generate(parser, null, itemFail);
+
+            // An element which doesn't move the position ends the loop, and isn't added, like at runtime
+            writer.Add($"if ({pos} == {itemStart}) break;");
+
+            if (needsCount)
+            {
+                writer.Add($"{count}++;");
+            }
+
+            if (itemFail.IsUsed)
+            {
+                writer.Add("continue;");
+                writer.PlaceFailureLabel(itemFail, itemStart, $"{pos} = {itemStart};");
+                writer.Add("break;");
+            }
+
+            writer.EndBlock();
+
+            if (oneOrMore)
+            {
+                writer.Add($"if ({count} == 0) {fail.Goto()}");
+            }
+
+            return;
         }
 
-        writer.BeginBlock(max > 0 ? $"while ({count} < {max})" : "while (true)");
+        // Peel the first item so 0-match loops never enter a try/finally or set up a ListBuilder.
+        var firstItem = writer.DeclareLocal(elementType, "item");
+        var firstStart = writer.DeclareLocal("int", "itemStart", "0");
+        var firstFail = writer.NewFailureLabel("itemFail");
+        var loopDone = writer.NewLabel("loopDone");
 
-        // Cancellation is checked for each element, like when each one was a helper method: the loop is the only part of
-        // span code whose length depends on the input
-        writer.Add($"{writer.Context.ParseContextName}.CheckCancellation();");
-        writer.Add($"{itemStart} = {pos};");
-        writer.Generate(parser, item, itemFail);
-
-        // An element which doesn't move the position ends the loop, and isn't added, like at runtime
-        writer.Add($"if ({pos} == {itemStart}) break;");
-
-        if (list != null)
+        if (writer.Context.SupportsCancellation)
         {
-            writer.Add($"{list}.Add({item});");
+            writer.Add($"{ctx}.CheckCancellation();");
         }
 
-        writer.Add($"{count}++;");
-
-        if (itemFail.IsUsed)
-        {
-            writer.Add("continue;");
-            writer.PlaceFailureLabel(itemFail, itemStart, $"{pos} = {itemStart};");
-            writer.Add("break;");
-        }
-
-        writer.EndBlock();
+        writer.Add($"{firstStart} = {pos};");
+        writer.Generate(parser, firstItem, firstFail);
 
         if (oneOrMore)
         {
-            writer.Add($"if ({count} == 0) {fail.Goto()}");
+            writer.Add($"if ({pos} == {firstStart}) {fail.Goto()}");
+        }
+        else
+        {
+            writer.BeginBlock($"if ({pos} == {firstStart})");
+            writer.Add($"{valueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            writer.Add(loopDone.Goto());
+            writer.EndBlock();
         }
 
-        if (list != null)
+        if (max == 1)
         {
-            writer.Add($"{valueVariable} = {list}.ToArray();");
-            writer.EndBlock();
-            writer.BeginBlock("finally");
-            writer.Add($"{list}.Release();");
-            writer.EndBlock();
+            writer.Add($"{valueVariable} = new {elementTypeName}[] {{ {firstItem} }};");
         }
+        else
+        {
+            // Keep ListBuilder and its try/finally in a local function reached only once at least one item matched.
+            var restName = $"spanLoopRest{writer.Context.NextNumber()}";
+            var childLocals = new List<string>();
+            var childBody = new List<string>();
+            var child = writer.CreateChild(childLocals, childBody);
+
+            var childItem = child.DeclareLocal(elementType, "item");
+            var childItemStart = child.DeclareLocal("int", "itemStart", "0");
+            var childCount = max > 0 ? child.DeclareLocal("int", "count", "1") : null;
+            var childItemFail = child.NewFailureLabel("itemFail");
+
+            child.Add($"var list = new global::Parlot.Fluent.ListBuilder<{elementTypeName}>();");
+            child.Add("list.Add(first);");
+            child.BeginBlock("try");
+            child.BeginBlock(max > 0 ? $"while ({childCount} < {max})" : "while (true)");
+
+            if (child.Context.SupportsCancellation)
+            {
+                child.Add($"{ctx}.CheckCancellation();");
+            }
+
+            child.Add($"{childItemStart} = {child.Pos};");
+            child.Generate(parser, childItem, childItemFail);
+            child.Add($"if ({child.Pos} == {childItemStart}) break;");
+            child.Add($"list.Add({childItem});");
+
+            if (max > 0)
+            {
+                child.Add($"{childCount}++;");
+            }
+
+            if (childItemFail.IsUsed)
+            {
+                child.Add("continue;");
+                child.PlaceFailureLabel(childItemFail, childItemStart, $"{child.Pos} = {childItemStart};");
+                child.Add("break;");
+            }
+
+            var childPosParam = $"{child.Pos}Ref";
+            child.EndBlock();
+            child.Add($"{childPosParam} = {child.Pos};");
+            child.Add("return list.ToArray();");
+            child.EndBlock();
+            child.BeginBlock("finally");
+            child.Add("list.Release();");
+            child.EndBlock();
+
+            var childNeedsSpanStart = child.UsesSpanStart || child.HasRecords;
+            var parameters = $"global::Parlot.Fluent.ParseContext {ctx}, global::System.ReadOnlySpan<char> {child.Span}, ref int {childPosParam}, {elementTypeName} first";
+            var arguments = $"{ctx}, {writer.Span}, ref {pos}, {firstItem}";
+
+            if (childNeedsSpanStart)
+            {
+                parameters += $", int {child.RawSpanStart}";
+                arguments += $", {writer.SpanStart}";
+            }
+
+            if (child.Moved != null)
+            {
+                var outerMoved = writer.EnsureMoved();
+                parameters += $", ref bool {child.Moved}";
+                arguments += $", ref {outerMoved}";
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("global::System.Collections.Generic.IReadOnlyList<").Append(elementTypeName).Append("> ").Append(restName).Append('(').Append(parameters).AppendLine(")");
+            sb.AppendLine("{");
+            sb.Append("    var ").Append(writer.Cursor).Append(" = ").Append(ctx).AppendLine(".Scanner.Cursor;");
+            sb.Append("    var ").Append(child.Pos).Append(" = ").Append(childPosParam).AppendLine(";");
+
+            foreach (var local in childLocals)
+            {
+                sb.Append("    ").AppendLine(local);
+            }
+
+            foreach (var line in childBody)
+            {
+                sb.Append("    ").AppendLine(line);
+            }
+
+            sb.Append('}');
+            writer.AddLocalFunction(sb.ToString());
+            writer.Add($"{valueVariable} = {restName}({arguments});");
+        }
+
+        if (firstFail.IsUsed)
+        {
+            writer.Add(loopDone.Goto());
+            writer.PlaceFailureLabel(firstFail, firstStart, $"{pos} = {firstStart};");
+
+            if (oneOrMore)
+            {
+                writer.Add(fail.Goto());
+            }
+            else
+            {
+                writer.Add($"{valueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            }
+        }
+
+        writer.PlaceLabel(loopDone);
     }
 
     /// <summary>
@@ -653,7 +852,7 @@ internal static class NumberSource
         var text = writer.DeclareLocal("global::System.ReadOnlySpan<char>", "numberText");
         var length = writer.DeclareLocal("int", "numberLength", "0");
         var reachedEnd = writer.DeclareLocal("bool", "numberReachedEnd", "false");
-        var number = writer.DeclareLocal(valueType, "number");
+        var outTarget = valueVariable ?? $"{SourceGenerationContext.GetTypeName(valueType)} _";
 
         writer.Add($"{text} = {writer.Span}.Slice({writer.Pos});");
         writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, (global::Parlot.Fluent.NumberOptions){(int)numberOptions}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
@@ -668,11 +867,6 @@ internal static class NumberSource
             : $"{text}.Slice(0, {length})";
         writer.Add($"if ({length} == 0) {fail.Goto()}");
         writer.Add($"{writer.Pos} += {length};");
-        writer.Add($"if (!{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})) {fail.AfterReading.Goto()}");
-
-        if (valueVariable != null)
-        {
-            writer.Add($"{valueVariable} = {number};");
-        }
+        writer.Add($"if (!{tryParseMethod}({digits}, {numberStyles}, {culture}, out {outTarget})) {fail.AfterReading.Goto()}");
     }
 }

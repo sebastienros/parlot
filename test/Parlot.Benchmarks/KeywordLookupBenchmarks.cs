@@ -282,10 +282,10 @@ public class KeywordLookupBenchmarks
                 return tree;
             }
 
-            return tree.Replace("System.BitConverter.IsLittleEndian", "false", StringComparison.Ordinal)
-                .Replace("System.Runtime.InteropServices.MemoryMarshal.Read<ushort>", "BigByte16", StringComparison.Ordinal)
-                .Replace("System.Runtime.InteropServices.MemoryMarshal.Read<uint>", bytes ? "BigByte32" : "BigChar32", StringComparison.Ordinal)
-                .Replace("System.Runtime.InteropServices.MemoryMarshal.Read<ulong>", bytes ? "BigByte64" : "BigChar64", StringComparison.Ordinal);
+            return tree.Replace("global::System.BitConverter.IsLittleEndian", "false", StringComparison.Ordinal)
+                .Replace("global::System.Runtime.InteropServices.MemoryMarshal.Read<ushort>", "BigByte16", StringComparison.Ordinal)
+                .Replace("global::System.Runtime.InteropServices.MemoryMarshal.Read<uint>", bytes ? "BigByte32" : "BigChar32", StringComparison.Ordinal)
+                .Replace("global::System.Runtime.InteropServices.MemoryMarshal.Read<ulong>", bytes ? "BigByte64" : "BigChar64", StringComparison.Ordinal);
         }
     }
 

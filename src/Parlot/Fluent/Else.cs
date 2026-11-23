@@ -124,25 +124,9 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
         // }
         // success = true; (always succeeds)
 
-        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
-        result.Body.Add($"if (!{success})");
-        result.Body.Add("{");
-
-        if (_func != null)
+        if (_func == null)
         {
-            var lambdaId = context.RegisterLambda(_func);
-            if (context.DiscardResult)
-            {
-                result.Body.Add($"    {lambdaId}({context.ParseContextName});");
-            }
-            else
-            {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
-            }
-        }
-        else
-        {
-            // Value-based: try to use LiteralHelper for supported types
+            // Value-based: validate supported literal types even when the result is discarded
             var valueExpr = LiteralHelper.ToLiteral(_value);
             if (valueExpr == null)
             {
@@ -151,13 +135,38 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
                     $"Use a lambda instead, e.g., .Else(static _ => yourValue)");
             }
 
-            if (!context.DiscardResult)
+            if (context.DiscardResult)
             {
+                var pin = context.Pin(result);
+                result.Body.Add($"{helperName}({context.ParseContextName}, out _);");
+                context.Unpin(result, pin);
+            }
+            else
+            {
+                var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
+                result.Body.Add($"if (!{success})");
+                result.Body.Add("{");
                 result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
+                result.Body.Add("}");
             }
         }
-
-        result.Body.Add("}");
+        else
+        {
+            var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+            var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {outTarget})");
+            var lambdaId = context.RegisterLambda(_func);
+            result.Body.Add($"if (!{success})");
+            result.Body.Add("{");
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaId}({context.ParseContextName});");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
+            }
+            result.Body.Add("}");
+        }
         result.Body.Add($"{result.SuccessVariable} = true;");
 
         return result;

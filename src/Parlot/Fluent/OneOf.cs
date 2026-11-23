@@ -1388,7 +1388,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                 result.Body.Add("        break;");
                 result.Body.Add("    }");
 
-                localFunctions.Add($"static int {dispatchName}(System.ReadOnlySpan<char> text)");
+                localFunctions.Add($"static int {dispatchName}(global::System.ReadOnlySpan<char> text)");
                 localFunctions.Add("{");
                 localFunctions.Add(KnownStringLookup.GeneratePrefixes(dispatch.Suffixes,
                     index => dispatch.GroupIndexes[index].ToString(CultureInfo.InvariantCulture),

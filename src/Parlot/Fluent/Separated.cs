@@ -748,113 +748,128 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: false, defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
         var cursorName = context.CursorName;
+        var ctx = context.ParseContextName;
 
         var listName = $"list{context.NextNumber()}";
-        var firstName = $"first{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";
         var initialPositionName = $"initialPosition{context.NextNumber()}";
+        var firstItemName = $"firstItem{context.NextNumber()}";
         var itemName = $"item{context.NextNumber()}";
         var needsCount = _max > 0 || _min > 1;
-
-        if (!context.DiscardResult)
-        {
-            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
-        }
-        result.Body.Add($"bool {firstName} = true;");
-        result.Body.Add($"var {endName} = {cursorName}.Offset;");
-        if (_min > 1)
-        {
-            result.Body.Add($"var {initialPositionName} = {endName};");
-        }
-        if (needsCount)
-        {
-            result.Body.Add($"int {countName} = 0;");
-        }
+        var firstOutTarget = context.DiscardResult ? "_" : $"var {firstItemName}";
+        var nextOutTarget = context.DiscardResult ? "_" : $"var {itemName}";
 
         // Use helpers instead of inlining
         var parserHelperName = GetElementHelper(context, parserSourceable, "Parser");
         var separatorHelperName = GetSeparatorHelper(context, separatorSourceable);
 
-        // The end of the last element is read again when a separator isn't followed by an element
-        var pin = context.Pin(result);
-        var bodyStart = result.Body.Count;
-        result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
-        result.Body.Add("{");
-        result.Body.Add($"    var {previousOffsetName} = {cursorName}.Offset;");
-
-        // If not first, try to parse separator
-        result.Body.Add($"    if (!{firstName})");
-        result.Body.Add("    {");
-        result.Body.Add($"        if (!{separatorHelperName}({context.ParseContextName}, out _))");
-        result.Body.Add("        {");
-        result.Body.Add("            break;");
-        result.Body.Add("        }");
-        result.Body.Add("    }");
-
-        // Try to parse element
-        result.Body.Add($"    if (!{parserHelperName}({context.ParseContextName}, out var {itemName}))");
-        result.Body.Add("    {");
-        result.Body.Add($"        if (!{firstName})");
-        result.Body.Add("        {");
-        result.Body.Add($"            {cursorName}.ResetPosition({endName});");
-        result.Body.Add("            break;");
-        result.Body.Add("        }");
-        result.Body.Add($"        {result.SuccessVariable} = false;");
-        result.Body.Add("        break;");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {endName} = {cursorName}.Offset;");
-        context.MovePin(result, pin, "        ");
-        result.Body.Add("    }");
-
-        // The first element is a value even when it doesn't move the cursor, see Parse()
-        result.Body.Add($"    if (!{firstName} && {cursorName}.Offset == {previousOffsetName})");
-        result.Body.Add("    {");
-        result.Body.Add("        break;");
-        result.Body.Add("    }");
-
-        result.Body.Add($"    {firstName} = false;");
-
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"    {listName}.Add({itemName});");
-        }
-        if (needsCount)
-        {
-            result.Body.Add($"    {countName}++;");
-        }
-        result.Body.Add("}");
-        context.Unpin(result, pin);
-
         if (_min > 1)
         {
-            result.Body.Add($"if ({countName} < {_min})");
+            result.Body.Add($"var {initialPositionName} = {cursorName}.Offset;");
+        }
+
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin(result);
+
+        // Peel the first element: it is a value even when it doesn't move the cursor, see Parse()
+        result.Body.Add($"if ({parserHelperName}({ctx}, out {firstOutTarget}))");
+        result.Body.Add("{");
+        if (_max == 1)
+        {
+            if (_min > 1)
+            {
+                result.Body.Add($"    {cursorName}.ResetPosition({initialPositionName});");
+            }
+            else
+            {
+                result.Body.Add($"    {result.SuccessVariable} = true;");
+                if (!context.DiscardResult)
+                {
+                    result.Body.Add($"    {result.ValueVariable} = new {elementTypeName}[] {{ {firstItemName} }};");
+                }
+            }
+        }
+        else
+        {
+            if (needsCount)
+            {
+                result.Body.Add($"    int {countName} = 1;");
+            }
+            var bodyStart = -1;
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {ListBuilderSource.Declare(listName, elementTypeName)}");
+                result.Body.Add($"    {listName}.Add({firstItemName});");
+                bodyStart = result.Body.Count;
+            }
+            result.Body.Add($"    var {endName} = {cursorName}.Offset;");
+            context.MovePin(result, pin, "    ");
+            result.Body.Add(_max == 0 ? "    while (true)" : $"    while ({countName} < {_max})");
+            result.Body.Add("    {");
+            result.Body.Add($"        var {previousOffsetName} = {cursorName}.Offset;");
+            result.Body.Add($"        if (!{separatorHelperName}({ctx}, out _))");
+            result.Body.Add("        {");
+            result.Body.Add("            break;");
+            result.Body.Add("        }");
+            result.Body.Add($"        if (!{parserHelperName}({ctx}, out {nextOutTarget}))");
+            result.Body.Add("        {");
+            result.Body.Add($"            {cursorName}.ResetPosition({endName});");
+            result.Body.Add("            break;");
+            result.Body.Add("        }");
+            result.Body.Add($"        {endName} = {cursorName}.Offset;");
+            context.MovePin(result, pin, "        ");
+            result.Body.Add($"        if ({cursorName}.Offset == {previousOffsetName})");
+            result.Body.Add("        {");
+            result.Body.Add("            break;");
+            result.Body.Add("        }");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"        {listName}.Add({itemName});");
+            }
+            if (needsCount)
+            {
+                result.Body.Add($"        {countName}++;");
+            }
+            result.Body.Add("    }");
+            if (_min > 1)
+            {
+                result.Body.Add($"    if ({countName} < {_min})");
+                result.Body.Add("    {");
+                result.Body.Add($"        {cursorName}.ResetPosition({initialPositionName});");
+                result.Body.Add("    }");
+                result.Body.Add("    else");
+                result.Body.Add("    {");
+                result.Body.Add($"        {result.SuccessVariable} = true;");
+                if (!context.DiscardResult)
+                {
+                    result.Body.Add($"        {result.ValueVariable} = {listName}.ToArray();");
+                }
+                result.Body.Add("    }");
+            }
+            else
+            {
+                result.Body.Add($"    {result.SuccessVariable} = true;");
+                if (!context.DiscardResult)
+                {
+                    result.Body.Add($"    {result.ValueVariable} = {listName}.ToArray();");
+                }
+            }
+            if (!context.DiscardResult)
+            {
+                ListBuilderSource.ReleaseInFinally(result, bodyStart, listName, "    ");
+            }
+        }
+        result.Body.Add("}");
+        if (_min == 0)
+        {
+            result.Body.Add("else");
             result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({initialPositionName});");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
             result.Body.Add("}");
         }
-
-        // Separated requires at least one element, unless its minimum is zero
-        result.Body.Add($"if (!{firstName})");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add(_min > 1 ? $"    if ({result.SuccessVariable}) {result.ValueVariable} = {listName}.ToArray();" : $"    {result.ValueVariable} = {listName}.ToArray();");
-        }
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
-        result.Body.Add("}");
-
-        if (!context.DiscardResult)
-        {
-            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
-        }
+        context.Unpin(result, pin);
 
         return result;
     }

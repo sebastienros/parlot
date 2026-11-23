@@ -149,29 +149,33 @@ internal sealed class SeekGuard
             var cursor = context.CursorName;
             var currentName = $"current{context.NextNumber()}";
 
+            var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+
             if (usable.SkipWhitespace)
             {
                 // The white space is skipped again by the parser, from the cache of the context
+                var test = GenerateTest(context, currentName, ranges);
                 var startName = $"start{context.NextNumber()}";
                 var recordedName = $"recorded{context.NextNumber()}";
 
-                result.Body.Add($"var {startName} = {cursor}.Offset;");
-                result.Body.Add($"var {recordedName} = {cursor}.RecordedFailure;");
-                result.Body.Add($"{ctx}.SkipWhiteSpace();");
                 result.Body.Add($"var {currentName} = {cursor}.Current;");
-                result.Body.Add($"if ({GenerateTest(context, currentName, ranges)})");
+                result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({currentName}))");
                 result.Body.Add("{");
+                result.Body.Add($"    var {startName} = {cursor}.Offset;");
+                result.Body.Add($"    var {recordedName} = {cursor}.RecordedFailure;");
+                result.Body.Add($"    {ctx}.SkipWhiteSpace();");
+                result.Body.Add($"    {currentName} = {cursor}.Current;");
                 result.Body.Add($"    {cursor}.ResetPosition({startName});");
-
+                result.Body.Add($"    if ({test})");
+                result.Body.Add("    {");
                 // Moving back over the white space isn't a failure the parser had
-                result.Body.Add($"    {cursor}.RestoreRecordedFailure({recordedName});");
-                result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+                result.Body.Add($"        {cursor}.RestoreRecordedFailure({recordedName});");
+                result.Body.Add($"        {result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
+                result.Body.Add("    }");
                 result.Body.Add("}");
-                result.Body.Add("else");
+                result.Body.Add($"else if ({test})");
                 result.Body.Add("{");
-
-                // The parser would have failed after skipping it
-                result.Body.Add($"    {cursor}.ResetPosition({startName});");
+                result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
                 result.Body.Add("}");
             }
             else
@@ -179,7 +183,7 @@ internal sealed class SeekGuard
                 result.Body.Add($"var {currentName} = {cursor}.Current;");
                 result.Body.Add($"if ({GenerateTest(context, currentName, ranges)})");
                 result.Body.Add("{");
-                result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+                result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
                 result.Body.Add("}");
             }
 

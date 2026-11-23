@@ -13,6 +13,12 @@ internal static class KnownStringLookup
     internal static string Generate(IReadOnlyList<string> words, bool bytes, bool ignoreCase, bool? wide = null,
         Func<int, string>? matchExpression = null, string failureExpression = "-1",
         bool splitByLength = true, string resultType = "int")
+        => GenerateCore(words, bytes, ignoreCase, wide, matchExpression, failureExpression, splitByLength, resultType,
+            knownLength: false, sharedLoadWidths: null);
+
+    private static string GenerateCore(IReadOnlyList<string> words, bool bytes, bool ignoreCase, bool? wide,
+        Func<int, string>? matchExpression, string failureExpression,
+        bool splitByLength, string resultType, bool knownLength, HashSet<int>? sharedLoadWidths)
     {
         if ((bytes || ignoreCase) && words.Any(static word => word.Any(static c => c > 127)))
         {
@@ -21,46 +27,63 @@ internal static class KnownStringLookup
 
         var output = new StringBuilder();
         var number = 0;
+        var loadWidths = sharedLoadWidths ?? new HashSet<int>();
         var candidates = words.Select((text, index) => new Candidate(text, index))
             .GroupBy(static candidate => candidate.Text, ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
             .Select(static group => group.First()).ToArray();
         var helpers = new StringBuilder();
         var inlineCandidates = 0;
         var lengthGroups = candidates.GroupBy(static candidate => candidate.Text.Length).OrderBy(static group => group.Key).ToArray();
-        var useLengthHelpers = splitByLength && candidates.Length > 32 && lengthGroups.Length > 1
-            && candidates.Sum(static candidate => candidate.Text.Length) > 1024;
-        output.AppendLine("switch (input.Length) {");
-        foreach (var group in lengthGroups)
+        if (knownLength && lengthGroups.Length == 1)
         {
-            output.AppendLine(FormattableString.Invariant($"case {group.Key}: {{"));
-            if (useLengthHelpers && (group.Count() > 4 || inlineCandidates + group.Count() > 32))
+            if (!Emit(lengthGroups[0].ToArray(), new bool[lengthGroups[0].Key]))
             {
-                output.AppendLine(FormattableString.Invariant($"return MatchLength{group.Key}(input);"));
-                output.AppendLine("}");
-                var dispatch = output;
-                output = helpers;
-                output.AppendLine(FormattableString.Invariant($"static {resultType} MatchLength{group.Key}(System.ReadOnlySpan<{(bytes ? "byte" : "char")}> input) {{"));
+                output.AppendLine(FormattableString.Invariant($"return {failureExpression};"));
+            }
+        }
+        else
+        {
+            var useLengthHelpers = splitByLength && candidates.Length > 32 && lengthGroups.Length > 1
+                && candidates.Sum(static candidate => candidate.Text.Length) > 1024;
+            output.AppendLine("switch (input.Length) {");
+            foreach (var group in lengthGroups)
+            {
+                output.AppendLine(FormattableString.Invariant($"case {group.Key}: {{"));
+                if (useLengthHelpers && (group.Count() > 4 || inlineCandidates + group.Count() > 32))
+                {
+                    output.AppendLine(FormattableString.Invariant($"return MatchLength{group.Key}(input);"));
+                    output.AppendLine("}");
+                    var dispatch = output;
+                    output = helpers;
+                    output.AppendLine(FormattableString.Invariant($"static {resultType} MatchLength{group.Key}(global::System.ReadOnlySpan<{(bytes ? "byte" : "char")}> input) {{"));
+                    if (!Emit(group.ToArray(), new bool[group.Key]))
+                    {
+                        output.AppendLine(FormattableString.Invariant($"return {failureExpression};"));
+                    }
+
+                    output.AppendLine("}");
+                    output = dispatch;
+                    continue;
+                }
+
+                inlineCandidates += group.Count();
                 if (!Emit(group.ToArray(), new bool[group.Key]))
                 {
-                    output.AppendLine(FormattableString.Invariant($"return {failureExpression};"));
+                    output.AppendLine("break;");
                 }
 
                 output.AppendLine("}");
-                output = dispatch;
-                continue;
             }
 
-            inlineCandidates += group.Count();
-            if (!Emit(group.ToArray(), new bool[group.Key]))
-            {
-                output.AppendLine("break;");
-            }
-
-            output.AppendLine("}");
+            output.AppendLine(FormattableString.Invariant($"}} return {failureExpression};"));
         }
 
-        output.AppendLine(FormattableString.Invariant($"}} return {failureExpression};"));
         output.Append(helpers);
+        if (sharedLoadWidths is null)
+        {
+            AppendLoadHelpers(output, bytes, loadWidths);
+        }
+
         return output.ToString();
 
         bool Emit(Candidate[] remaining, bool[] proven)
@@ -165,7 +188,10 @@ internal static class KnownStringLookup
 
             var local = $"chunk{number++}";
             var mask = Mask(remaining[0].Text, bestOffset, bestWidth);
-            output.AppendLine(FormattableString.Invariant($"var {local} = {Load(bestOffset, bestWidth)} & {Constant(mask)};"));
+            var loadExpr = Load(bestOffset, bestWidth);
+            output.AppendLine(IsFullMask(mask, bestWidth)
+                ? $"var {local} = {loadExpr};"
+                : $"var {local} = {loadExpr} & {Constant(mask)};");
             output.AppendLine(FormattableString.Invariant($"switch ({local}) {{"));
             var nextProven = (bool[])proven.Clone();
             Prove(nextProven, bestOffset, bestWidth);
@@ -184,32 +210,31 @@ internal static class KnownStringLookup
             return false;
         }
 
-        string Test(Candidate candidate, int offset, int width) =>
-            $"({Load(offset, width)} & {Constant(Mask(candidate.Text, offset, width))}) == {Constant(Value(candidate.Text, offset, width))}";
+        string Test(Candidate candidate, int offset, int width)
+        {
+            var mask = Mask(candidate.Text, offset, width);
+            var loadExpr = Load(offset, width);
+            var value = Constant(Value(candidate.Text, offset, width));
+            return IsFullMask(mask, width)
+                ? $"{loadExpr} == {value}"
+                : $"({loadExpr} & {Constant(mask)}) == {value}";
+        }
+
+        bool IsFullMask(ulong mask, int width)
+        {
+            var bits = width * (bytes ? 8 : 16);
+            return bits == 64 ? mask == ulong.MaxValue : mask == ((1UL << bits) - 1);
+        }
 
         string Load(int offset, int width)
         {
             if (width == 1)
             {
-                return $"(ulong)input[{offset}]";
+                return FormattableString.Invariant($"(ulong)input[{offset}]");
             }
 
-            var type = (bytes ? width : width * 2) switch { 2 => "ushort", 4 => "uint", _ => "ulong" };
-            var slice = $"input.Slice({offset}, {width})";
-            var span = bytes ? slice : $"System.Runtime.InteropServices.MemoryMarshal.AsBytes({slice})";
-            var load = $"System.Runtime.InteropServices.MemoryMarshal.Read<{type}>({span})";
-            // Constants use little-endian lane order, independently of the compiler host.
-            var reverse = type == "ushort" ? $"unchecked((ushort)(({load} >> 8) | ({load} << 8)))"
-                : $"System.Buffers.Binary.BinaryPrimitives.ReverseEndianness({load})";
-            if (!bytes)
-            {
-                // Reverse char lanes, not the bytes within each UTF-16 code unit.
-                reverse = width == 2
-                    ? $"(({load} >> 16) | ({load} << 16))"
-                    : $"(({load} >> 48) | (({load} >> 16) & 0xFFFF0000UL) | (({load} << 16) & 0xFFFF00000000UL) | ({load} << 48))";
-            }
-
-            return $"(ulong)(System.BitConverter.IsLittleEndian ? {load} : {reverse})";
+            loadWidths.Add(width);
+            return FormattableString.Invariant($"Load{width}(input, {offset})");
         }
 
         ulong Mask(string text, int offset, int width)
@@ -253,8 +278,10 @@ internal static class KnownStringLookup
         string failureExpression = "null", string resultType = "string")
     {
         var helpers = new StringBuilder();
+        var usedLoadWidths = new HashSet<int>();
         var number = 0;
         var body = Emit(words.Select((text, index) => new Candidate(text, index)).ToArray(), failureExpression);
+        AppendLoadHelpers(helpers, bytes: false, usedLoadWidths);
         return body + helpers;
 
         string Match(int index) => matchExpression?.Invoke(index) ?? LiteralHelper.StringToLiteral(words[index]);
@@ -289,15 +316,38 @@ internal static class KnownStringLookup
                     var name = $"MatchPrefix{number++}";
                     matches[i] = $"{name}(text.Slice({length}))";
                     var helper = Emit(suffixes, failure);
-                    helpers.AppendLine(FormattableString.Invariant($"static {resultType} {name}(System.ReadOnlySpan<char> text) {{"));
+                    helpers.AppendLine(FormattableString.Invariant($"static {resultType} {name}(global::System.ReadOnlySpan<char> text) {{"));
                     helpers.AppendLine(helper);
                     helpers.AppendLine("}");
                 }
             }
 
-            return $"if (text.Length < {length}) return {failure};\nvar input = text.Slice(0, {length});\n"
-                + Generate(groups.Select(static group => group.Key).ToArray(), bytes: false, ignoreCase: false,
-                    matchExpression: index => matches[index], failureExpression: failure, splitByLength: false, resultType: resultType);
+            return FormattableString.Invariant($"if (text.Length < {length}) return {failure};\nvar input = text.Slice(0, {length});\n")
+                + GenerateCore(groups.Select(static group => group.Key).ToArray(), bytes: false, ignoreCase: false, wide: null,
+                    matchExpression: index => matches[index], failureExpression: failure, splitByLength: false, resultType: resultType,
+                    knownLength: true, sharedLoadWidths: usedLoadWidths);
+        }
+    }
+
+    private static void AppendLoadHelpers(StringBuilder target, bool bytes, HashSet<int> widths)
+    {
+        foreach (var width in widths.OrderBy(static w => w))
+        {
+            var type = (bytes ? width : width * 2) switch { 2 => "ushort", 4 => "uint", _ => "ulong" };
+            var elemType = bytes ? "byte" : "char";
+            var slice = FormattableString.Invariant($"input.Slice(offset, {width})");
+            var span = bytes ? slice : $"global::System.Runtime.InteropServices.MemoryMarshal.AsBytes({slice})";
+            // Constants use little-endian lane order, independently of the compiler host.
+            var reverse = bytes
+                ? type == "ushort"
+                    ? "unchecked((ushort)((value >> 8) | (value << 8)))"
+                    : "global::System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(value)"
+                // Reverse char lanes, not the bytes within each UTF-16 code unit.
+                : width == 2
+                    ? "((value >> 16) | (value << 16))"
+                    : "((value >> 48) | ((value >> 16) & 0xFFFF0000UL) | ((value << 16) & 0xFFFF00000000UL) | (value << 48))";
+
+            target.AppendLine(FormattableString.Invariant($"static ulong Load{width}(global::System.ReadOnlySpan<{elemType}> input, int offset) {{ var value = global::System.Runtime.InteropServices.MemoryMarshal.Read<{type}>({span}); return global::System.BitConverter.IsLittleEndian ? value : {reverse}; }}"));
         }
     }
 

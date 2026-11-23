@@ -380,6 +380,182 @@ public class GeneratorFixesTests
         Assert.DoesNotContain("Cursor.NewLines =", Source("nameof(TryParse)"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void CheckCancellation_Is_Emitted_Only_When_CancellationToken_Is_Present()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
+                {
+                    var expr = Deferred<string>();
+                    expr.Parser = Between(Terms.Char('('), expr, Terms.Char(')'))
+                        .Or(OneOrMany(Literals.Char('a')).Then(static items => new string('a', items.Count)));
+                    return expr;
+                }
+            }
+            """;
+
+        // Without CancellationToken: no CheckCancellation calls anywhere
+        var (noTokenResult, noTokenCompilation) = Generate(Declaration, grammar);
+        AssertNoErrors(noTokenResult, noTokenCompilation);
+        var noTokenSource = GetStandaloneSource(noTokenResult);
+        Assert.DoesNotContain("CheckCancellation()", noTokenSource, StringComparison.Ordinal);
+
+        // With CancellationToken: CheckCancellation is emitted in entry, deferred, helper, and span loop
+        const string withTokenDeclaration = """
+            using System.Threading;
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, CancellationToken cancellationToken, out string value);
+            }
+            """;
+        var (withTokenResult, withTokenCompilation) = Generate(withTokenDeclaration, grammar);
+        AssertNoErrors(withTokenResult, withTokenCompilation);
+        var withTokenSource = GetStandaloneSource(withTokenResult);
+        Assert.Contains("context.CheckCancellation();", withTokenSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Non_Left_Recursive_Deferred_Elides_Loop_Tracking_And_Context_Subclass()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
+                {
+                    var expr = Deferred<string>();
+                    expr.Parser = Between(Terms.Char('('), expr, Terms.Char(')'))
+                        .Or(Terms.Text("foo"));
+                    return expr;
+                }
+            }
+            """;
+
+        var (result, compilation) = Generate(Declaration, grammar);
+        AssertNoErrors(result, compilation);
+        var source = GetStandaloneSource(result);
+        Assert.DoesNotContain("__parlotDeferred", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Deferred_0_Core", source, StringComparison.Ordinal);
+        Assert.Contains("private static class GeneratedParser_", source, StringComparison.Ordinal);
+        Assert.Contains("context.EnsureSufficientStack();", source, StringComparison.Ordinal);
+
+        var parse = Load(compilation).GetType("Grammar")!.GetMethod("TryParse")!;
+        object?[] args = ["((foo))", null];
+        Assert.True((bool)parse.Invoke(null, args)!);
+        Assert.Equal("foo", args[1]);
+
+        // With MaxRecursionDepth: still elides __parlotDeferred, still enforces depth limit
+        var limitedGrammar = grammar.Replace("[GenerateParser(nameof(TryParse))]", "[GenerateParser(nameof(TryParse), MaxRecursionDepth = 2)]", StringComparison.Ordinal);
+        var (limitedResult, limitedCompilation) = Generate(Declaration, limitedGrammar);
+        AssertNoErrors(limitedResult, limitedCompilation);
+        var limitedSource = GetStandaloneSource(limitedResult);
+        Assert.DoesNotContain("__parlotDeferred", limitedSource, StringComparison.Ordinal);
+        Assert.Contains("context.EnterRecursion(2);", limitedSource, StringComparison.Ordinal);
+        Assert.Contains("context.ExitRecursion();", limitedSource, StringComparison.Ordinal);
+
+        var limitedParse = Load(limitedCompilation).GetType("Grammar")!.GetMethod("TryParse")!;
+        args = ["(foo)", null];
+        Assert.True((bool)limitedParse.Invoke(null, args)!);
+        args = ["(((foo)))", null];
+        Assert.False((bool)limitedParse.Invoke(null, args)!);
+    }
+
+    [Fact]
+    public void Reentrant_WhiteSpaceParser_Conservatively_Keeps_Deferred_Loop_Tracking()
+    {
+        const string grammar = """
+            using Parlot;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
+                {
+                    var ws = Deferred<TextSpan>();
+                    ws.Parser = Capture(Literals.Char(' '));
+                    var expr = Deferred<string>();
+                    expr.Parser = Between(Terms.Char('('), expr, Terms.Char(')'))
+                        .Or(Terms.Text("foo"));
+                    return expr.WithWhiteSpaceParser(ws);
+                }
+            }
+            """;
+
+        var (result, compilation) = Generate(Declaration, grammar);
+        AssertNoErrors(result, compilation);
+        var source = GetStandaloneSource(result);
+        Assert.Contains("__parlotDeferred0", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void KnownStringLookup_Uses_Single_Load_Helper_And_Omits_Redundant_Masks_And_Prefix_Length_Switch()
+    {
+        var keywords = Parsers.OneOf(
+            Parsers.Literals.Keyword("select"), Parsers.Literals.Keyword("insert"), Parsers.Literals.Keyword("update"), Parsers.Literals.Keyword("delete"),
+            Parsers.Literals.Keyword("create"), Parsers.Literals.Keyword("alter"), Parsers.Literals.Keyword("values"), Parsers.Literals.Keyword("having"));
+        var keywordSource = string.Join("\n", Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(keywords)
+            .GenerateSource(new Parlot.SourceGeneration.SourceGenerationContext()).Body);
+        Assert.Contains("Load4(input,", keywordSource, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(keywordSource, @"MemoryMarshal\.Read<ulong>"));
+        Assert.DoesNotContain("0xFFFFFFFFFFFFFFFFUL", keywordSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("0xFFFFFFFFUL", keywordSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("0xFFFFUL", keywordSource, StringComparison.Ordinal);
+        Assert.Contains("keywordLimit", keywordSource, StringComparison.Ordinal);
+
+        var texts = Parsers.OneOf(
+            Parsers.Literals.Text("select"), Parsers.Literals.Text("insert"), Parsers.Literals.Text("update"), Parsers.Literals.Text("delete"),
+            Parsers.Literals.Text("create"), Parsers.Literals.Text("alter"), Parsers.Literals.Text("values"), Parsers.Literals.Text("having"));
+        var textSource = string.Join("\n", Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(texts)
+            .GenerateSource(new Parlot.SourceGeneration.SourceGenerationContext()).Body);
+        Assert.DoesNotContain("switch (input.Length)", textSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("0xFFFFFFFFFFFFFFFFUL", textSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SeekGuard_Emits_MaySkipWhiteSpace_Fast_Path()
+    {
+        var expr = Parsers.Deferred<string>();
+        expr.Parser = Parsers.Terms.Identifier().Then(static x => x.ToString());
+        var parser = Parsers.Terms.Char('?').SkipAnd(expr).AndSkip(Parsers.Terms.Char(':')).And(expr).Optional();
+
+        var context = new Parlot.SourceGeneration.SourceGenerationContext();
+        Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(parser).GenerateSource(context);
+        var guard = Assert.Single(context.Helpers.Enumerate(), static helper => helper.MethodName.Contains("_SeekGuard", StringComparison.Ordinal));
+        var body = string.Join("\n", guard.Result.Body);
+        Assert.Contains("if (context.MaySkipWhiteSpace(", body, StringComparison.Ordinal);
+        Assert.Contains("else if (", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NumberLiteralBase_Uses_NumberFormatInfo_InvariantInfo_And_Inline_NumberStyles()
+    {
+        var context = new Parlot.SourceGeneration.SourceGenerationContext();
+        var result = Assert.IsAssignableFrom<Parlot.SourceGeneration.ISourceable>(Parsers.Literals.Integer()).GenerateSource(context);
+        var body = string.Join("\n", result.Body);
+
+        Assert.Contains("global::System.Globalization.NumberFormatInfo.InvariantInfo", body, StringComparison.Ordinal);
+        Assert.Contains("(global::System.Globalization.NumberStyles)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CultureInfo.InvariantCulture", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("parsedValue", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(context.StaticFields, static field => field.Contains("NumberStyles", StringComparison.Ordinal));
+    }
+
+    private static string GetStandaloneSource(GeneratorDriverRunResult result) =>
+        string.Join("\n", result.Results.SelectMany(static run => run.GeneratedSources)
+            .Where(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal))
+            .Select(static source => source.SourceText.ToString()));
+
     internal const string Declaration = """
         public static partial class Grammar
         {
