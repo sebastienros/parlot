@@ -11,16 +11,19 @@ namespace Parlot.Fluent;
 
 public static partial class Parsers
 {
+    private static readonly LiteralBuilder s_literals = new();
+    private static readonly TermBuilder s_terms = new();
+
     /// <summary>
     /// Provides parsers for literals. Literals do not skip spaces before being parsed and can be combined to
     /// parse composite terms.
     /// </summary>
-    public static LiteralBuilder Literals => new();
+    public static LiteralBuilder Literals => s_literals;
 
     /// <summary>
     /// Provides parsers for terms. Terms skip spaces before being parsed.
     /// </summary>
-    public static TermBuilder Terms => new();
+    public static TermBuilder Terms => s_terms;
 
     /// <summary>
     /// Builds a parser that matches one or more values separated by another parser.
@@ -119,6 +122,12 @@ public static partial class Parsers
     /// </summary>
     /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
     public static Parser<object?> NewLineAhead(string newLines) => new NewLineAhead(newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
+    /// Builds a parser that returns an <see cref="Option{T}"/> representing an optional match.
+    /// </summary>
+    /// <param name="parser">The optional parser.</param>
+    public static Parser<Option<T>> Optional<T>(Parser<T> parser) => new Optional<T>(parser);
 
     /// <summary>
     /// Builds a parser that returns an empty list or a list containing one match.
@@ -328,8 +337,12 @@ public class LiteralBuilder
     public Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatchedText = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
-    /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
+    /// Builds a parser that matches a keyword by ensuring the following character is not an ASCII letter (<c>a-z</c>, <c>A-Z</c>).
     /// </summary>
+    /// <remarks>
+    /// Digits and <c>_</c> are not treated as identifier continuations by default (so <c>"SELECT1"</c> matches <c>"SELECT"</c>).
+    /// Use the <see cref="Keyword(string, ReadOnlySpan{char}, bool, bool)"/> overload to specify custom identifier continuation characters.
+    /// </remarks>
     public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
@@ -432,6 +445,17 @@ public class LiteralBuilder
     /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
     /// </param>
     public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => new StringLiteral(quotes, escapes, returnDecoded);
+
+    /// <summary>
+    /// Builds a parser that matches a string delimited by <paramref name="quote"/> with the escape sequences of
+    /// <paramref name="escapes"/>, and decodes them unless <paramref name="returnDecoded"/> is <see langword="false"/>.
+    /// </summary>
+    /// <param name="quote">The quote char that delimits the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <see langword="false"/> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(char quote, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => new StringLiteral(quote, escapes, returnDecoded);
 
     /// <summary>
     /// Builds a parser that matches an interpolated text, like a template literal: a text between <paramref name="open"/>
@@ -660,8 +684,12 @@ public class TermBuilder
     public Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
-    /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
+    /// Builds a parser that matches a keyword by ensuring the following character is not an ASCII letter (<c>a-z</c>, <c>A-Z</c>).
     /// </summary>
+    /// <remarks>
+    /// Digits and <c>_</c> are not treated as identifier continuations by default (so <c>"SELECT1"</c> matches <c>"SELECT"</c>).
+    /// Use the <see cref="Keyword(string, ReadOnlySpan{char}, bool, bool)"/> overload to specify custom identifier continuation characters.
+    /// </remarks>
     public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
@@ -765,6 +793,17 @@ public class TermBuilder
     /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
     /// </param>
     public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => SkipWhiteSpace(new StringLiteral(quotes, escapes, returnDecoded));
+
+    /// <summary>
+    /// Builds a parser that matches a string delimited by <paramref name="quote"/> with the escape sequences of
+    /// <paramref name="escapes"/>, after white space, and decodes them unless <paramref name="returnDecoded"/> is <see langword="false"/>.
+    /// </summary>
+    /// <param name="quote">The quote char that delimits the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <see langword="false"/> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(char quote, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => SkipWhiteSpace(new StringLiteral(quote, escapes, returnDecoded));
 
     /// <summary>
     /// Builds a parser that matches an interpolated text after the white space, see
@@ -947,17 +986,15 @@ public class TermBuilder
 #endif
 
     /// <summary>
-    /// Builds a parser that matches single line comments.
+    /// Builds a parser that matches single line comments after white space.
     /// </summary>
     /// <param name="singleLineStart">The text that starts the single line comment, e.g., <code>"//"</code>, <code>"--"</code>, <code>"#"</code></param>
-    /// <returns></returns>
-    public Parser<TextSpan> Comments(string singleLineStart) => Literals.WhiteSpace(includeNewLines: true).Optional().SkipAnd(Literals.Comments(singleLineStart));
+    public Parser<TextSpan> Comments(string singleLineStart) => SkipWhiteSpace(Literals.Comments(singleLineStart));
 
     /// <summary>
-    /// Builds a parser that matches multi line comments.
+    /// Builds a parser that matches multi line comments after white space.
     /// </summary>
     /// <param name="multiLineStart">The text that starts the multi line comment, e.g., <code>"/*"</code></param>
     /// <param name="multiLineEnd">The text that ends the multi line comment, e.g., <code>"*/"</code></param>
-    /// <returns></returns>
-    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Literals.WhiteSpace(includeNewLines: true).Optional().SkipAnd(Literals.Comments(multiLineStart, multiLineEnd));
+    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => SkipWhiteSpace(Literals.Comments(multiLineStart, multiLineEnd));
 }

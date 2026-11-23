@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,13 +44,13 @@ public abstract partial class Parser<T>
     /// See <see cref="Parse(TextReader, StreamParseOptions?, CancellationToken)"/>.
     /// </remarks>
     /// <returns>Whether the text matched.</returns>
-    public bool TryParse(TextReader reader, out T value, out ParseError? error, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    public bool TryParse(TextReader reader, [MaybeNullWhen(false)] out T value, out ParseError? error, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
     {
         return TryParse(reader, out value, out error, options, withReason: true, cancellationToken);
     }
 
     // withReason: whether a failure with a reason returns its error, which computes its position
-    private bool TryParse(TextReader reader, out T value, out ParseError? error, StreamParseOptions? options, bool withReason, CancellationToken cancellationToken)
+    private bool TryParse(TextReader reader, [MaybeNullWhen(false)] out T value, out ParseError? error, StreamParseOptions? options, bool withReason, CancellationToken cancellationToken)
     {
         ThrowHelper.ThrowIfNull(reader, nameof(reader));
 
@@ -96,7 +97,7 @@ public abstract partial class Parser<T>
     /// See <see cref="TryParse(TextReader, out T, out ParseError?, StreamParseOptions?, CancellationToken)"/>.
     /// </remarks>
     /// <returns>Whether the text matched.</returns>
-    public bool TryParse(TextReader reader, out T value, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    public bool TryParse(TextReader reader, [MaybeNullWhen(false)] out T value, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
     {
         return TryParse(reader, out value, out _, options, withReason: false, cancellationToken);
     }

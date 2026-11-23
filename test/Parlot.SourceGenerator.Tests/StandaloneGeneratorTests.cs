@@ -889,6 +889,92 @@ public class StandaloneGeneratorTests
         Assert.Equal(("expected bang", false, 4, 3, 3), diagnostic);
     }
 
+    [Fact]
+    public void Covariant_OneOf_Generates_Self_Contained_Standalone_Code()
+    {
+        var source = """
+            public abstract class Animal
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public sealed class Dog : Animal { }
+            public sealed class Cat : Animal { }
+
+            public static partial class CovariantGrammar
+            {
+                public static partial bool TryParseAnimal(string text, out Animal value);
+                public static partial bool TryParseAnimalSpan(string text, out string value);
+                public static partial bool TryParseAnimalDeferred(string text, out Animal value);
+            }
+            """;
+
+        var grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+
+            public static partial class CovariantGrammar
+            {
+                [GenerateParser(nameof(TryParseAnimal))]
+                private static Parser<Animal> BuildAnimal()
+                {
+                    var dog = Terms.Text("dog").Then(static _ => new Dog { Name = "Buddy" });
+                    var cat = Terms.Text("cat").Then(static _ => new Cat { Name = "Whiskers" });
+                    return OneOf<Animal>(dog, cat).Eof();
+                }
+
+                [GenerateParser(nameof(TryParseAnimalSpan))]
+                private static Parser<string> BuildAnimalSpan()
+                {
+                    var dog = Terms.Text("dog").Then(static _ => new Dog { Name = "Buddy" });
+                    var cat = Terms.Text("cat").Then(static _ => new Cat { Name = "Whiskers" });
+                    return Capture(OneOf<Animal>(dog, cat)).Then(static s => s.ToString()).Eof();
+                }
+
+                [GenerateParser(nameof(TryParseAnimalDeferred))]
+                private static Parser<Animal> BuildAnimalDeferred()
+                {
+                    var dog = Deferred<Dog>().Named("dog");
+                    dog.Parser = Terms.Text("dog").Then(static _ => new Dog { Name = "Buddy" });
+                    var cat = Terms.Text("cat").Then(static _ => new Cat { Name = "Whiskers" });
+                    return OneOf<Animal>(dog, cat).Eof();
+                }
+            }
+            """;
+
+        var (result, compilation) = Generate(source, grammar);
+        AssertNoErrors(result, compilation);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var assembly = Assembly.Load(stream.ToArray());
+        var type = assembly.GetType("CovariantGrammar")!;
+        var tryParseAnimal = type.GetMethod("TryParseAnimal")!;
+        var tryParseSpan = type.GetMethod("TryParseAnimalSpan")!;
+        var tryParseDeferred = type.GetMethod("TryParseAnimalDeferred")!;
+
+        object[] dogArgs = ["  dog", null!];
+        Assert.True((bool)tryParseAnimal.Invoke(null, dogArgs)!);
+        Assert.Equal("Dog", dogArgs[1].GetType().Name);
+
+        object[] catArgs = ["cat", null!];
+        Assert.True((bool)tryParseAnimal.Invoke(null, catArgs)!);
+        Assert.Equal("Cat", catArgs[1].GetType().Name);
+
+        object[] failArgs = ["bird", null!];
+        Assert.False((bool)tryParseAnimal.Invoke(null, failArgs)!);
+        Assert.Null(failArgs[1]);
+
+        object[] spanArgs = ["  cat", null!];
+        Assert.True((bool)tryParseSpan.Invoke(null, spanArgs)!);
+        Assert.Equal("  cat", (string)spanArgs[1]);
+
+        object[] deferredArgs = ["  dog", null!];
+        Assert.True((bool)tryParseDeferred.Invoke(null, deferredArgs)!);
+        Assert.Equal("Dog", deferredArgs[1].GetType().Name);
+    }
+
     private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
     {
         Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);

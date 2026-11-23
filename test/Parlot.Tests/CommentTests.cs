@@ -128,4 +128,27 @@ public class CommentTests
         Assert.Equal(0, CaptureTests.MeasureAllocations(parser, text));
     }
 #endif
+
+    [Fact]
+    public void TermsCommentsShouldBeSeekableAndRespectWhiteSpaceSet()
+    {
+        var singleLine = Terms.Comments("//");
+        var multiLine = Terms.Comments("/*", "*/");
+
+        Assert.True(((Parlot.Rewriting.ISeekable)singleLine).CanSeek);
+        Assert.True(((Parlot.Rewriting.ISeekable)singleLine).SkipWhitespace);
+        Assert.True(((Parlot.Rewriting.ISeekable)multiLine).CanSeek);
+        Assert.True(((Parlot.Rewriting.ISeekable)multiLine).SkipWhitespace);
+
+        var choice = OneOf(singleLine, multiLine, Terms.Identifier());
+        Assert.True(((Parlot.Rewriting.ISeekable)choice).CanSeek);
+        Assert.Equal("// hi", choice.Parse("  // hi\n").ToString());
+        Assert.Equal("/* hi */", choice.Parse("  /* hi */").ToString());
+        Assert.Equal("foo", choice.Parse("  foo").ToString());
+
+        // Respects WhiteSpaceSet.Ascii (does not skip U+00A0 NBSP)
+        var asciiOnly = singleLine.WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
+        Assert.False(asciiOnly.TryParse("\u00A0// hi", out _));
+        Assert.True(asciiOnly.TryParse("  // hi", out _));
+    }
 }
