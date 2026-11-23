@@ -14,6 +14,7 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnaly
     private readonly Parser<T>[] _parsers;
     private readonly Func<C, int>? _contextSelector;
     private readonly Func<int>? _selector;
+    private readonly bool _withoutValue;
 
     // The hints of the branches, read when they are asked for since they can be Deferred parsers set later
     private ForwardedHints? _hints;
@@ -65,7 +66,9 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnaly
 
         for (var i = 0; i < _parsers.Length; i++)
         {
-            _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+            var parser = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+            _parsers[i] = parser;
+            _withoutValue |= parser.CanParseWithoutValue;
         }
     }
 
@@ -93,20 +96,30 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnaly
             return false;
         }
 
-        var nextParser = _parsers[index];
-
-        var parsed = new ParseResult<T>();
-
-        if (nextParser.Parse(context, ref parsed))
-        {
-            result.Set(parsed.Start, parsed.End, parsed.Value);
-
-            context.ExitParser(this);
-            return true;
-        }
+        var success = _parsers[index].Parse(context, ref result);
 
         context.ExitParser(this);
-        return false;
+        return success;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var index = _selector is not null ? _selector() : _contextSelector!((C)context);
+
+        if ((uint)index >= (uint)_parsers.Length)
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        var success = _parsers[index].ParseWithoutValue(context, ref result);
+
+        context.ExitParser(this);
+        return success;
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)

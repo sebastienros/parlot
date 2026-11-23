@@ -13,11 +13,27 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISource
 {
     private readonly Parser<T> _parser;
     private readonly int _index;
+    private readonly bool _withoutValue;
 
     public OperatorIndex(Parser<T> parser, int index)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _index = index;
+        _withoutValue = parser.CanParseWithoutValue;
+    }
+
+    /// <summary>
+    /// Wraps <paramref name="parser"/> with its index, hoisting a top-level <see cref="SkipWhiteSpace{T}"/> outside
+    /// so <see cref="OneOf{T}"/> can strip it when hoisting whitespace for a choice of operators.
+    /// </summary>
+    internal static Parser<int> Wrap(Parser<T> parser, int index)
+    {
+        if (parser is SkipWhiteSpace<T> skip)
+        {
+            return new SkipWhiteSpace<int>(new OperatorIndex<T>(skip.Parser, index)) { Name = skip.Name };
+        }
+
+        return new OperatorIndex<T>(parser, index);
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -42,7 +58,7 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISource
 
         var parsed = new ParseResult<T>();
 
-        if (_parser.Parse(context, ref parsed))
+        if (_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
         {
             result.Set(parsed.Start, parsed.End, _index);
 

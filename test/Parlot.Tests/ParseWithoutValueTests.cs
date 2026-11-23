@@ -154,6 +154,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Bs.Then(static x => x.Count));
         AssertSameAsParse(A.WhenFollowedBy(Bs));
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
+        AssertSameAsParse(Bs.WhenFollowedBy(A));
+        AssertSameAsParse(Bs.WhenNotFollowedBy(A));
         AssertSameAsParse(Peek(Bs));
         AssertSameAsParse(Peek(A.And(Bs)).And(A));
         AssertSameAsParse(AsToken(Bs));
@@ -165,6 +167,17 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Bs.WithState<ParseContext, int>(static _ => 0, static (_, _) => { }, static x => x + 1));
         AssertSameAsParse(A.And(Bs).WithState(static () => 0, static _ => { }, static x => x + 1));
         AssertSameAsParse(A.And(Bs).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char(' ')))));
+        AssertSameAsParse(Bs.ElseError("expected b"), ["b", "bb", "  b c"]);
+        AssertSameAsParse(Bs.Lookup(skipWhiteSpace: true, 'b'));
+        AssertSameAsParse(If(static () => true, Bs, As));
+        AssertSameAsParse(If(static () => false, Bs, As));
+        AssertSameAsParse(Select(static () => 0, Bs, As));
+        AssertSameAsParse(Select(static () => 1, Bs, As));
+        AssertSameAsParse(A.Switch(static (_, _) => 0, Bs, As));
+        AssertSameAsParse(new OneOf<IReadOnlyList<char>, IReadOnlyList<char>, object>(Bs, As));
+        AssertSameAsParse(Literals.String(), ["\"hello\"", "\"he\\nllo\"", "\"unterminated", "abc"]);
+        AssertSameAsParse(Literals.Text("abc", caseInsensitive: true, returnMatchedText: true), ["abc", "ABC", "AbC", "abd", ""]);
+        AssertSameAsParse(Literals.Keyword("abc", caseInsensitive: true, returnMatchedText: true), ["abc", "ABC", "abcd", "ABC ", ""]);
     }
 
     [Fact]

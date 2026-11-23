@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 
 internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
-    private readonly CharMap<object> _map = new();
+    private readonly CharSet _set;
     private readonly string _values;
     private readonly int _minSize;
     private readonly int _maxSize;
@@ -22,11 +22,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable, IL
     public ListOfChars(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0, bool negate = false)
     {
         _values = values.ToString();
-
-        foreach (var c in values)
-        {
-            _map.Set(c, new object());
-        }
+        _set = new CharSet(values);
 
         _minSize = minSize;
         _maxSize = maxSize;
@@ -62,7 +58,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable, IL
 
         for (var i = 0; i < maxLength; i++)
         {
-            if (_map[span[i]] == null != _negate)
+            if (_set.Contains(span[i]) == _negate)
             {
                 break;
             }

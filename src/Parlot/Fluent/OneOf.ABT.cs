@@ -12,11 +12,15 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
 {
     private readonly Parser<A> _parserA;
     private readonly Parser<B> _parserB;
+    private readonly bool _withoutValueA;
+    private readonly bool _withoutValueB;
 
     public OneOf(Parser<A> parserA, Parser<B> parserB)
     {
         _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
         _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
+        _withoutValueA = _parserA.CanParseWithoutValue;
+        _withoutValueB = _parserB.CanParseWithoutValue;
     }
 
     // The hints of both parsers, read when they are asked for since they can be Deferred parsers set later
@@ -49,7 +53,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
     {
         if (context.CollectDiagnostics)
         {
-            return ParseCollecting(context, ref result);
+            return ParseCollecting(context, ref result, withValue: true);
         }
 
         context.EnterParser(this);
@@ -83,8 +87,50 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
         return false;
     }
 
+    internal override bool CanParseWithoutValue => _withoutValueA || _withoutValueB;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        if (context.CollectDiagnostics)
+        {
+            return ParseCollecting(context, ref result, withValue: false);
+        }
+
+        context.EnterParser(this);
+
+        var resultA = new ParseResult<A>();
+
+        // The second parser reads from the same position
+        var pin = context.Pin();
+        var successA = _withoutValueA ? _parserA.ParseWithoutValue(context, ref resultA) : _parserA.Parse(context, ref resultA);
+        context.Unpin(pin);
+
+        if (successA)
+        {
+            result.Start = resultA.Start;
+            result.End = resultA.End;
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        var resultB = new ParseResult<B>();
+
+        if (_withoutValueB ? _parserB.ParseWithoutValue(context, ref resultB) : _parserB.Parse(context, ref resultB))
+        {
+            result.Start = resultB.Start;
+            result.End = resultB.End;
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
     // Like Parse, discarding the diagnostics of the alternative which isn't used
-    private bool ParseCollecting(ParseContext context, ref ParseResult<T> result)
+    private bool ParseCollecting(ParseContext context, ref ParseResult<T> result, bool withValue)
     {
         context.EnterParser(this);
 
@@ -92,12 +138,20 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
         var resultA = new ParseResult<A>();
 
         var pin = context.Pin();
-        var successA = _parserA.Parse(context, ref resultA);
+        var successA = !withValue && _withoutValueA ? _parserA.ParseWithoutValue(context, ref resultA) : _parserA.Parse(context, ref resultA);
         context.Unpin(pin);
 
         if (successA)
         {
-            result.Set(resultA.Start, resultA.End, resultA.Value);
+            if (withValue)
+            {
+                result.Set(resultA.Start, resultA.End, resultA.Value);
+            }
+            else
+            {
+                result.Start = resultA.Start;
+                result.End = resultA.End;
+            }
 
             context.ExitParser(this);
             return true;
@@ -107,9 +161,17 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
 
         var resultB = new ParseResult<B>();
 
-        if (_parserB.Parse(context, ref resultB))
+        if (!withValue && _withoutValueB ? _parserB.ParseWithoutValue(context, ref resultB) : _parserB.Parse(context, ref resultB))
         {
-            result.Set(resultB.Start, resultB.End, resultB.Value);
+            if (withValue)
+            {
+                result.Set(resultB.Start, resultB.End, resultB.Value);
+            }
+            else
+            {
+                result.Start = resultB.Start;
+                result.End = resultB.End;
+            }
 
             context.ExitParser(this);
             return true;

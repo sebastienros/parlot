@@ -32,6 +32,9 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
     // Whether the parser is invoked without its value when this one's isn't used
     private readonly bool _withoutValue;
 
+    // Whether the parser is a StringLiteral that decodes escapes directly into _pool
+    private readonly bool _hasDecodedStringLiteral;
+
     /// <summary>
     /// Creates a parser returning the text of <paramref name="parser"/> as a pooled string.
     /// </summary>
@@ -42,12 +45,20 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
 
         // A string literal decodes its escape sequences into the pool too, rather than into a new string. It is copied,
         // since it can be used elsewhere.
-        _parser = parser switch
+        switch (parser)
         {
-            StringLiteral literal => new StringLiteral(literal, _pool),
-            SkipWhiteSpace<TextSpan> { Parser: StringLiteral literal } skip => new SkipWhiteSpace<TextSpan>(new StringLiteral(literal, _pool)) { Name = skip.Name },
-            _ => parser,
-        };
+            case StringLiteral { ReturnDecoded: true } literal:
+                _parser = new StringLiteral(literal, _pool);
+                _hasDecodedStringLiteral = true;
+                break;
+            case SkipWhiteSpace<TextSpan> { Parser: StringLiteral { ReturnDecoded: true } literal } skip:
+                _parser = new SkipWhiteSpace<TextSpan>(new StringLiteral(literal, _pool)) { Name = skip.Name };
+                _hasDecodedStringLiteral = true;
+                break;
+            default:
+                _parser = parser;
+                break;
+        }
 
         _withoutValue = _parser.CanParseWithoutValue;
     }
@@ -80,7 +91,13 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
 
         if (_parser.Parse(context, ref parsed))
         {
-            result.Set(parsed.Start, parsed.End, _pool.Get(parsed.Value));
+            // When StringLiteral decoded escapes into _pool, it returns new TextSpan(decoded) with Offset == 0 and
+            // Length == Buffer.Length; unescaped slices always start after the opening quote (Offset >= 1).
+            var value = _hasDecodedStringLiteral && parsed.Value.Offset == 0 && parsed.Value.Buffer is { } buffer && parsed.Value.Length == buffer.Length
+                ? buffer
+                : _pool.Get(parsed.Value);
+
+            result.Set(parsed.Start, parsed.End, value);
 
             context.ExitParser(this);
             return true;
@@ -146,7 +163,14 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
         {
             result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}))");
             result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {context.GetStringPoolField(_pool)}.Get({parsedName});");
+            if (_hasDecodedStringLiteral)
+            {
+                result.Body.Add($"    {result.ValueVariable} = {parsedName}.Offset == 0 && {parsedName}.Buffer is not null && {parsedName}.Length == {parsedName}.Buffer.Length ? {parsedName}.Buffer : {context.GetStringPoolField(_pool)}.Get({parsedName});");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {context.GetStringPoolField(_pool)}.Get({parsedName});");
+            }
         }
 
         result.Body.Add($"    {result.SuccessVariable} = true;");

@@ -48,7 +48,6 @@ internal sealed class StreamingDriver : IDisposable
         _options.Validate();
 
         _chars = [];
-        Context = CreateContext("", isFinal: false);
     }
 
     public StreamParseOptions Options => _options;
@@ -56,9 +55,9 @@ internal sealed class StreamingDriver : IDisposable
     /// <summary>
     /// The context for the current window.
     /// </summary>
-    public ParseContext Context { get; private set; }
+    public ParseContext? Context { get; private set; }
 
-    public Cursor Cursor => Context.Scanner.Cursor;
+    public Cursor Cursor => Context!.Scanner.Cursor;
 
     /// <summary>
     /// Whether the window holds the end of the input.
@@ -72,19 +71,23 @@ internal sealed class StreamingDriver : IDisposable
     public async ValueTask GrowAsync(int start)
     {
         // The cursor of the current window, which tells the line and column of the start of the new one once it is read
-        var cursor = Cursor;
+        var cursor = Context?.Scanner.Cursor;
         var atEnd = start == _length;
         var available = _length - start;
 
         if (available >= _options.MaxBufferedCharacters)
         {
-            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(cursor.GetPosition(start)));
+            var errorPosition = cursor is not null ? cursor.GetPosition(start) : new TextPosition(start, _line, _column);
+            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(errorPosition));
         }
 
         // At the end of the current window, a '\r' ending it is counted as the end of a line until the next char is read
-        var position = cursor.GetPosition(start);
-        _line = position.Line;
-        _column = position.Column;
+        if (cursor is not null)
+        {
+            var position = cursor.GetPosition(start);
+            _line = position.Line;
+            _column = position.Column;
+        }
 
         if (start > 0)
         {
@@ -133,10 +136,10 @@ internal sealed class StreamingDriver : IDisposable
         }
 
         // It doesn't when a '\n' starts the new window
-        if (atEnd && _length > 0 && _chars[0] == '\n')
+        if (cursor is not null && atEnd && _length > 0 && _chars[0] == '\n')
         {
             cursor.MarkFollowedByLineFeed();
-            position = cursor.GetPosition(start);
+            var position = cursor.GetPosition(start);
             _line = position.Line;
             _column = position.Column;
         }
@@ -217,8 +220,16 @@ internal sealed class StreamingDriver : IDisposable
                 return true;
             }
 
-            // Skip empty frames, the window is empty
-            Context = CreateContext("", isFinal: true);
+            // Skip empty frames without creating a throwaway Context
+            if (_frameDelimited)
+            {
+                _charBefore = delimiter;
+                _offset++;
+                _frameStart++;
+                _pendingDelimiter = true;
+            }
+
+            _frameLength = -1;
         }
     }
 
@@ -289,8 +300,16 @@ internal sealed class StreamingDriver : IDisposable
 
         _pendingDelimiter = false;
 
-        // Same rule as the cursor, whose line terminators are the ones of the frame before it
-        if (Cursor.EndsLine(delimiter, _length > _frameStart ? _chars[_frameStart] : -1))
+        // Same rule as the cursor, whose line terminators are the ones of the frame before it.
+        // Without a ContextFactory, the cursor uses the default "\n" terminator, avoiding a context allocation before the first non-empty frame.
+        var next = _length > _frameStart ? _chars[_frameStart] : -1;
+        var endsLine = Context is not null
+            ? Context.Scanner.Cursor.EndsLine(delimiter, next)
+            : _options.ContextFactory is null
+                ? delimiter == '\n'
+                : (Context = CreateContext("", isFinal: false)).Scanner.Cursor.EndsLine(delimiter, next);
+
+        if (endsLine)
         {
             _line++;
             _column = 1;
@@ -380,6 +399,13 @@ internal sealed class StreamingItemReader<T, TSeparator>
         while (true)
         {
             var context = _driver.Context;
+
+            if (context is null)
+            {
+                RetryOffset = 0;
+                return StreamingStep.NeedMore;
+            }
+
             var cursor = context.Scanner.Cursor;
             var start = cursor.Offset;
 

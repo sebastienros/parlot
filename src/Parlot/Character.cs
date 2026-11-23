@@ -422,12 +422,14 @@ public static partial class Character
 
     public static TextSpan DecodeString(TextSpan textSpan)
     {
-        if (textSpan.Span.IsEmpty || textSpan.Span.IndexOf('\\') == -1)
+        var span = textSpan.Span;
+
+        if (span.IsEmpty || span.IndexOf('\\') == -1)
         {
             return textSpan;
         }
 
-        return new TextSpan(DecodeStringInternal(textSpan.Span));
+        return new TextSpan(DecodeStringInternal(span));
     }
 
     public static TextSpan DecodeString(string s, int offset, int length)
@@ -447,6 +449,7 @@ public static partial class Character
     /// <summary>
     /// Whether a char is white space, but not a new line, in the default set: one of <see cref="WhiteSpaces"/>.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsWhiteSpace(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpace) != 0;
@@ -456,6 +459,7 @@ public static partial class Character
     /// Whether a char is white space or a new line in the default set: one of <see cref="WhiteSpaceOrNewLines"/>, the chars
     /// <see cref="char.IsWhiteSpace(char)"/> accepts.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsWhiteSpaceOrNewLine(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
@@ -541,5 +545,6 @@ public static partial class Character
     /// <summary>
     /// Whether a char is a new line of the default set: one of <see cref="NewLines"/>.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v' or '\u0085' or '\u2028' or '\u2029';
 }

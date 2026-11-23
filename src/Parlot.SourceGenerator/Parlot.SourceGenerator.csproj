@@ -76,7 +76,6 @@
     <EmbeddedResource Include="../Parlot/Polyfills/Polyfills.Char.cs" LogicalName="Parlot.StandaloneRuntime.Polyfills.Char.cs" />
     <EmbeddedResource Include="../Parlot/Polyfills/Polyfills.ArgumentNullException.cs" LogicalName="Parlot.StandaloneRuntime.Polyfills.ArgumentNullException.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/ParseContext.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ParseContext.cs" />
-    <EmbeddedResource Include="../Parlot/Fluent/HybridList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.HybridList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/ListBuilder.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ListBuilder.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/LongestMatch.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.LongestMatch.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/OperatorList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.OperatorList.cs" />

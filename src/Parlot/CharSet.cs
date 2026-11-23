@@ -110,14 +110,9 @@ internal readonly struct CharSet
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Contains(char c)
     {
-        if (c < 64)
-        {
-            return ((_low >> c) & 1) != 0;
-        }
-
         if (c < 128)
         {
-            return ((_high >> (c - 64)) & 1) != 0;
+            return (((c < 64 ? _low : _high) >> c) & 1) != 0;
         }
 
         return _anyOther || (_others is not null && ContainsOther(c));

@@ -991,7 +991,7 @@ internal sealed class GrammarAnalysis
 
         switch (typeName)
         {
-            case "SkipWhiteSpace" when first is not null && Literal(first) is { } term:
+            case "SkipWhiteSpace" when first is not null && Literal(UnwrapOperator(first)) is { } term:
                 return "Terms." + term;
             case "Then" or "PooledString" or "Discard" or "IParserAdapter" or "OperatorIndex" or "IndexedOperator" when first is not null:
                 return Describe(first, depth + 1);
@@ -1011,6 +1011,9 @@ internal sealed class GrammarAnalysis
 
         return typeName ?? StripArity(parser.GetType().Name);
     }
+
+    private object UnwrapOperator(object parser)
+        => ParlotTypeName(parser) is "OperatorIndex" or "IndexedOperator" && FirstInvoked(parser) is { } inner ? inner : parser;
 
     // The call that builds one of Parlot's literals, after Literals. or Terms.
     private static string? Literal(object parser)

@@ -305,7 +305,11 @@ public class ParseContext
         get => _coldState?.OnEnterParser;
         set
         {
-            GetColdState().OnEnterParser = value;
+            if (value is not null || _coldState is not null)
+            {
+                GetColdState().OnEnterParser = value;
+            }
+
             SetFlag(EnterHookFlag, value is not null);
         }
     }
@@ -318,7 +322,11 @@ public class ParseContext
         get => _coldState?.OnExitParser;
         set
         {
-            GetColdState().OnExitParser = value;
+            if (value is not null || _coldState is not null)
+            {
+                GetColdState().OnExitParser = value;
+            }
+
             SetFlag(ExitHookFlag, value is not null);
         }
     }
@@ -712,6 +720,12 @@ public class ParseContext
         var cursor = Scanner.Cursor;
         var start = cursor.Offset;
 
+        if (start == _cacheOffset)
+        {
+            end = _cacheEndOffset;
+            return cursor.PeekNext(end - start);
+        }
+
         // Moving the cursor back over white space is not a failure where it ends
         var recorded = cursor.RecordedFailure;
         var pin = Pin();
@@ -784,24 +798,17 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void SkipWhiteSpaceOfSet()
     {
-        if (UseNewLines)
-        {
-            if (_skipMask == (byte)CharacterMask.WhiteSpace)
-            {
-                Scanner.SkipWhiteSpace();
-            }
-            else
-            {
-                Scanner.SkipWhiteSpace(_skipMask);
-            }
-        }
-        else if (_skipMask == (byte)CharacterMask.WhiteSpaceOrNewLine)
+        if (_skipMask == (byte)CharacterMask.WhiteSpaceOrNewLine)
         {
             Scanner.SkipWhiteSpaceOrNewLine();
         }
+        else if (_skipMask == (byte)CharacterMask.WhiteSpace)
+        {
+            Scanner.SkipWhiteSpace();
+        }
         else
         {
-            Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
+            Scanner.SkipWhiteSpace(_skipMask);
         }
     }
 
@@ -1204,10 +1211,10 @@ public class ParseContext
             return -1;
         }
 
-        return PinNotInlined();
+        return PinNotInlined(Scanner.Cursor.Offset);
     }
 
-    private int PinNotInlined()
+    private int PinNotInlined(int offset)
     {
         var state = _coldState!;
         var count = state.PinCount;
@@ -1217,7 +1224,7 @@ public class ParseContext
             Array.Resize(ref state.Pins, count * 2);
         }
 
-        state.Pins![count] = Scanner.Cursor.Offset;
+        state.Pins![count] = offset;
         state.PinCount = count + 1;
 
         return count;
@@ -1242,9 +1249,7 @@ public class ParseContext
             return -1;
         }
 
-        var pin = PinNotInlined();
-        _coldState!.Pins![pin] = offset;
-        return pin;
+        return PinNotInlined(offset);
     }
 
     // Moves a pin to a position the cursor already moved past, which is still buffered since no text was read after it

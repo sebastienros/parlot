@@ -12,8 +12,6 @@ public class Cursor
 {
     public const char NullChar = '\0';
 
-    private int _textLength;
-
     // Index of the current char in Buffer. Offset adds _base, the absolute offset of Buffer[0], which is 0 unless
     // the cursor reads a compacting window of a stream (see ReplaceBuffer).
     private int _offset;
@@ -27,7 +25,7 @@ public class Cursor
     // The line and column are only computed when a position is requested, from the text (see GetPosition), such that moving
     // the cursor only updates the offset. Absolute offsets. The origin is the position the cursor was created at, the only
     // one whose line and column are given rather than counted. In compacting mode it moves to the start of the window when
-    // the text before it is dropped. Invariant: _base <= _originOffset <= _base + _textLength.
+    // the text before it is dropped. Invariant: _base <= _originOffset <= _base + Buffer.Length.
     private int _originOffset;
     private int _originLine;
     private int _originColumn;
@@ -91,9 +89,8 @@ public class Cursor
     public Cursor(string buffer, in TextPosition position, bool isFinal)
     {
         Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        _textLength = Buffer.Length;
 
-        if (position.Offset < 0 || position.Offset > _textLength)
+        if (unchecked((uint)position.Offset) > (uint)buffer.Length)
         {
             throw new ArgumentOutOfRangeException(nameof(position));
         }
@@ -102,9 +99,9 @@ public class Cursor
         _originOffset = _furthestOffset = position.Offset;
         _originLine = position.Line;
         _originColumn = position.Column;
-        Eof = _offset == _textLength;
+        Eof = _offset == buffer.Length;
         _flags = (byte)((isFinal ? 0 : NotFinalFlag) | (Eof ? HitEndFlag : 0));
-        Current = Eof ? NullChar : Buffer[_offset];
+        Current = Eof ? NullChar : buffer[_offset];
     }
 
     /// <summary>
@@ -234,12 +231,12 @@ public class Cursor
         var lines = _lines;
 
         // Forward from the furthest position requested, the common case, without a '\r' a '\n' can still follow
-        if (lines is not null && offset > lines.FrontierOffset && offset - _base <= _textLength && (_flags & CrLfFlag) == 0)
+        if (lines is not null && offset > lines.FrontierOffset && offset - _base <= Buffer.Length && (_flags & CrLfFlag) == 0)
         {
             return MoveFrontier(lines, offset);
         }
 
-        if (offset < _originOffset || offset - _base > _textLength)
+        if (offset < _originOffset || offset - _base > Buffer.Length)
         {
             return GetPositionOutsideOrigin(offset);
         }
@@ -370,18 +367,30 @@ public class Cursor
         lines.EnsureCapacity(lines.Count + (lines.FrontierLine - FindPosition(lines, from).Line));
 
         var text = GetSpan(from, offset - from);
-        var newLines = NewLines.AsSpan();
         var position = 0;
         int index;
 
-        while ((index = text.Slice(position).IndexOfAny(newLines)) >= 0)
+        if (_newLines is null)
         {
-            var end = position + index;
-            position = end + 1;
-
-            if (EndsLineAt(from + end))
+            while ((index = text.Slice(position).IndexOf('\n')) >= 0)
             {
-                lines.Add(from + end + 1);
+                position += index + 1;
+                lines.Add(from + position);
+            }
+        }
+        else
+        {
+            var newLines = _newLines.AsSpan();
+
+            while ((index = text.Slice(position).IndexOfAny(newLines)) >= 0)
+            {
+                var end = position + index;
+                position = end + 1;
+
+                if (EndsLineAt(from + end))
+                {
+                    lines.Add(from + end + 1);
+                }
             }
         }
 
@@ -429,7 +438,7 @@ public class Cursor
     // always counted from the origin
     private TextPosition GetPositionOutsideOrigin(int offset)
     {
-        var end = _base + _textLength;
+        var end = _base + Buffer.Length;
 
         if (offset > end)
         {
@@ -604,8 +613,15 @@ public class Cursor
     // The start of the line of an offset of the buffer when it is after the offset from, or -1
     private int FindLineStartAfter(int from, int offset)
     {
-        var newLines = NewLines.AsSpan();
         var text = GetSpan(from, offset - from);
+
+        if (_newLines is null)
+        {
+            var end = text.LastIndexOf('\n');
+            return end < 0 ? -1 : from + end + 1;
+        }
+
+        var newLines = _newLines.AsSpan();
 
         while (true)
         {
@@ -636,15 +652,16 @@ public class Cursor
     private int FollowsCarriageReturn(int offset)
     {
         var index = offset - _base;
+        var buffer = Buffer;
 
-        if ((_flags & CrLfFlag) == 0 || index < 0 || Buffer[index] != '\r')
+        if ((_flags & CrLfFlag) == 0 || index < 0 || buffer[index] != '\r')
         {
             return FollowedByOther;
         }
 
-        if (++index < _textLength)
+        if (++index < buffer.Length)
         {
-            return Buffer[index] == '\n' ? FollowedByLineFeed : FollowedByOther;
+            return buffer[index] == '\n' ? FollowedByLineFeed : FollowedByOther;
         }
 
         if ((_flags & FollowedByLineFeedFlag) != 0)
@@ -723,8 +740,11 @@ public class Cursor
             // The number of lines starting before the origin, or at it
             dropped = dropped >= 0 ? dropped + 1 : ~dropped;
 
-            Count -= dropped;
-            Array.Copy(Starts, dropped, Starts, 0, Count);
+            if (dropped > 0)
+            {
+                Count -= dropped;
+                Array.Copy(Starts, dropped, Starts, 0, Count);
+            }
 
             // The lines of a large window which was dropped aren't retained for the rest of a stream
             if (Starts.Length > 64 && Count < Starts.Length / 4)
@@ -812,7 +832,7 @@ public class Cursor
     /// <summary>
     /// The number of chars buffered after the current position.
     /// </summary>
-    internal int Remaining => _textLength - _offset;
+    internal int Remaining => Buffer.Length - _offset;
 
 #if !PARLOT_STRING_ONLY
     /// <summary>
@@ -828,7 +848,7 @@ public class Cursor
         // The lines are counted from the origin, the text before the new window is dropped: its lines are counted first
         if (bufferStart > _originOffset)
         {
-            var end = _base + _textLength;
+            var end = _base + Buffer.Length;
 
             // The new window tells whether a '\r' ending the current one is followed by a '\n'
             if (end - bufferStart < buffer.Length && buffer[end - bufferStart] == '\n')
@@ -851,21 +871,20 @@ public class Cursor
         }
 
         Buffer = buffer;
-        _textLength = buffer.Length;
         _base = bufferStart;
         _offset = offset - bufferStart;
         _flags = (byte)((_flags & (HitEndFlag | PositionRequestedFlag | CrLfFlag)) | (isFinal ? 0 : NotFinalFlag));
 
-        if (_offset >= _textLength)
+        if (_offset >= buffer.Length)
         {
-            _offset = _textLength;
+            _offset = buffer.Length;
             Eof = true;
             Current = NullChar;
         }
         else
         {
             Eof = false;
-            Current = Buffer[_offset];
+            Current = buffer[_offset];
         }
     }
 #endif
@@ -877,11 +896,12 @@ public class Cursor
     public void Advance()
     {
         var offset = _offset + 1;
+        var buffer = Buffer;
 
-        if (offset < _textLength)
+        if ((uint)offset < (uint)buffer.Length)
         {
             _offset = offset;
-            Current = Buffer[offset];
+            Current = buffer[offset];
         }
         else
         {
@@ -896,18 +916,16 @@ public class Cursor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance(int count)
     {
-        if (Eof)
-        {
-            return;
-        }
+        var buffer = Buffer;
 
         // A single unsigned compare selects a count which doesn't reach the end of the text, and isn't negative
-        if (unchecked((uint)count < (uint)(_textLength - _offset)))
+        if (unchecked((uint)count < (uint)(buffer.Length - _offset)))
         {
-            _offset += count;
-            Current = Buffer[_offset];
+            var offset = _offset + count;
+            _offset = offset;
+            Current = buffer[offset];
         }
-        else if (count > 0)
+        else if (count > 0 && !Eof)
         {
             AdvanceToEnd();
         }
@@ -923,16 +941,18 @@ public class Cursor
     /// </remarks>
     public void AdvanceNoNewLines(int offset)
     {
-        var newOffset = _offset + offset;
+        var newOffset = unchecked(_offset + offset);
+        var buffer = Buffer;
 
-        if (newOffset >= _textLength)
+        if (unchecked((uint)newOffset) < (uint)buffer.Length)
+        {
+            _offset = newOffset;
+            Current = buffer[newOffset];
+        }
+        else
         {
             AdvanceToEnd();
-            return;
         }
-
-        Current = Buffer[newOffset];
-        _offset = newOffset;
     }
 
     /// <summary>
@@ -948,7 +968,7 @@ public class Cursor
         var offset = _offset + count;
         var buffer = Buffer;
 
-        // The length of the buffer, rather than _textLength which is the same, lets the JIT remove the bounds check
+        // The length of the buffer lets the JIT remove the bounds check
         if (unchecked((uint)offset) < (uint)buffer.Length)
         {
             _offset = offset;
@@ -963,7 +983,7 @@ public class Cursor
     // Moving to the end of the text, or staying there, which records that the end of the buffer was reached
     private void AdvanceToEnd()
     {
-        _offset = _textLength;
+        _offset = Buffer.Length;
         Eof = true;
         _flags |= HitEndFlag;
         Current = NullChar;
@@ -1258,13 +1278,15 @@ public class Cursor
     /// <summary>
     /// Evaluates a char forward in the _buffer.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public char PeekNext(int index = 1)
     {
-        var nextIndex = _offset + index;
+        var nextIndex = unchecked(_offset + index);
+        var buffer = Buffer;
 
-        if (nextIndex >= _textLength || nextIndex < 0)
+        if (unchecked((uint)nextIndex) >= (uint)buffer.Length)
         {
-            if (nextIndex >= _textLength)
+            if (nextIndex >= buffer.Length)
             {
                 _flags |= HitEndFlag;
             }
@@ -1272,7 +1294,7 @@ public class Cursor
             return NullChar;
         }
 
-        return Buffer[nextIndex];
+        return buffer[nextIndex];
     }
 
     /// <summary>
@@ -1337,14 +1359,24 @@ public class Cursor
     public bool Match(ReadOnlySpan<char> s)
     {
         // Equivalent to StringComparison.Ordinal comparison
-
-        if (_textLength < _offset + s.Length)
+        if (!s.IsEmpty && Current != s[0] && !Eof)
         {
-            MarkHitEndIfPrefix(s, StringComparison.Ordinal);
             return false;
         }
 
-        return Span.StartsWith(s);
+        var buffer = Buffer;
+
+        if (buffer.Length < _offset + s.Length)
+        {
+            if (!IsFinal)
+            {
+                MarkHitEndIfPrefix(s, StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+
+        return buffer.AsSpan(_offset).StartsWith(s);
     }
 
     /// <summary>
@@ -1353,13 +1385,19 @@ public class Cursor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Match(ReadOnlySpan<char> s, StringComparison comparisonType)
     {
-        if (_textLength < _offset + s.Length)
+        var buffer = Buffer;
+
+        if (buffer.Length < _offset + s.Length)
         {
-            MarkHitEndIfPrefix(s, comparisonType);
+            if (!IsFinal)
+            {
+                MarkHitEndIfPrefix(s, comparisonType);
+            }
+
             return false;
         }
 
-        return Span.StartsWith(s, comparisonType);
+        return buffer.AsSpan(_offset).StartsWith(s, comparisonType);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

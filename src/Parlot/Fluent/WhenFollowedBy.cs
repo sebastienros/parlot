@@ -8,15 +8,22 @@ namespace Parlot.Fluent;
 /// Ensure the given parser matches at the current position without consuming input (positive lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     private readonly Parser<T> _parser;
-    private readonly Parser<object> _lookahead;
+    private readonly IValuelessParser _lookahead;
+    private readonly bool _withoutValue;
 
     public WhenFollowedBy(Parser<T> parser, Parser<object> lookahead)
+        : this(parser, (IValuelessParser)(lookahead ?? throw new ArgumentNullException(nameof(lookahead))))
+    {
+    }
+
+    internal WhenFollowedBy(Parser<T> parser, IValuelessParser lookahead)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lookahead = lookahead ?? throw new ArgumentNullException(nameof(lookahead));
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -29,6 +36,8 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
     public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parser) && InvokesOnlyLiterals.Of(_lookahead);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -63,9 +72,52 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         var recorded = cursor.RecordedFailure;
 
         // Now check if the lookahead parser matches at the current position
-        var lookaheadResult = new ParseResult<object>();
         var pin = context.Pin();
-        var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
+        var lookaheadSuccess = _lookahead.ParseWithoutValue(context);
+        context.Unpin(pin);
+
+        // If lookahead failed, fail this parser and reset to start: the lookahead was expected, its failure counts
+        if (!lookaheadSuccess)
+        {
+            cursor.ResetPosition(start);
+            context.ExitParser(this);
+            return false;
+        }
+
+        // Reset position to before the lookahead (it shouldn't consume input). What the lookahead matched says nothing
+        // about what follows at this position.
+        cursor.ResetPosition(beforeLookahead);
+        cursor.RestoreRecordedFailure(recorded);
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var start = context.Scanner.Cursor.Offset;
+
+        // First, parse with the main parser
+        var mainSuccess = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
+
+        if (!mainSuccess)
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        // Save position before lookahead check
+        var cursor = context.Scanner.Cursor;
+        var beforeLookahead = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
+
+        // Now check if the lookahead parser matches at the current position
+        var pin = context.Pin();
+        var lookaheadSuccess = _lookahead.ParseWithoutValue(context);
         context.Unpin(pin);
 
         // If lookahead failed, fail this parser and reset to start: the lookahead was expected, its failure counts
@@ -108,7 +160,7 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
+        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(_lookahead.ValueType);
 
         // Use helpers instead of inlining
         var mainHelperName = context.Helpers

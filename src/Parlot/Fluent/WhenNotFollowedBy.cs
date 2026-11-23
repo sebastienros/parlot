@@ -8,15 +8,24 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     private readonly Parser<T> _parser;
-    private readonly Parser<object> _lookahead;
+    private readonly IValuelessParser _lookahead;
+    private readonly bool _withoutValue;
+    private readonly SeekGuard _lookaheadGuard;
 
     public WhenNotFollowedBy(Parser<T> parser, Parser<object> lookahead)
+        : this(parser, (IValuelessParser)(lookahead ?? throw new ArgumentNullException(nameof(lookahead))))
+    {
+    }
+
+    internal WhenNotFollowedBy(Parser<T> parser, IValuelessParser lookahead)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _lookahead = lookahead ?? throw new ArgumentNullException(nameof(lookahead));
+        _withoutValue = _parser.CanParseWithoutValue;
+        _lookaheadGuard = new SeekGuard(lookahead, guardChoices: true);
     }
 
     /// <summary>
@@ -26,7 +35,12 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
     /// <param name="parser">The parser reading the value.</param>
     /// <param name="lookahead">The parser which must not match after it.</param>
     /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
-    public WhenNotFollowedBy(Parser<T> parser, Parser<object> lookahead, object reason) : this(parser, lookahead)
+    public WhenNotFollowedBy(Parser<T> parser, Parser<object> lookahead, object reason)
+        : this(parser, (IValuelessParser)(lookahead ?? throw new ArgumentNullException(nameof(lookahead))), reason)
+    {
+    }
+
+    internal WhenNotFollowedBy(Parser<T> parser, IValuelessParser lookahead, object reason) : this(parser, lookahead)
     {
         _reason = reason ?? throw new ArgumentNullException(nameof(reason));
     }
@@ -44,6 +58,8 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
     public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parser) && InvokesOnlyLiterals.Of(_lookahead);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -78,9 +94,54 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         var recorded = cursor.RecordedFailure;
 
         // Now check if the lookahead parser matches at the current position
-        var lookaheadResult = new ParseResult<object>();
         var pin = context.Pin();
-        var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
+        var lookaheadSuccess = _lookaheadGuard.CanStart(context) && _lookahead.ParseWithoutValue(context);
+        context.Unpin(pin);
+
+        // If lookahead succeeded, fail this parser and reset to start. The failure is at the start of what must not
+        // follow, wherever it was read up to.
+        if (lookaheadSuccess)
+        {
+            context.RecordRejected(beforeLookahead, recorded, _lookahead is ISeekable { SkipWhitespace: true }, _reason);
+            cursor.ResetPosition(start);
+            context.ExitParser(this);
+            return false;
+        }
+
+        // Reset position to before the lookahead (it shouldn't consume input). What the lookahead read, to find that it
+        // doesn't match, says nothing about what follows at this position.
+        cursor.ResetPosition(beforeLookahead);
+        cursor.RestoreRecordedFailure(recorded);
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var start = context.Scanner.Cursor.Offset;
+
+        // First, parse with the main parser
+        var mainSuccess = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
+
+        if (!mainSuccess)
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        // Save position before lookahead check
+        var cursor = context.Scanner.Cursor;
+        var beforeLookahead = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
+
+        // Now check if the lookahead parser matches at the current position
+        var pin = context.Pin();
+        var lookaheadSuccess = _lookaheadGuard.CanStart(context) && _lookahead.ParseWithoutValue(context);
         context.Unpin(pin);
 
         // If lookahead succeeded, fail this parser and reset to start. The failure is at the start of what must not
@@ -125,16 +186,16 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
+        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(_lookahead.ValueType);
 
         // Use helpers instead of inlining
         var mainHelperName = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Main", mainValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var lookaheadHelperName = context.WithDiscardResult(true, () => context.Helpers
+        var lookaheadHelperName = context.WithDiscardResult(true, () => SeekGuard.GetHelper(context, _lookahead, context.Helpers
             .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
-            .MethodName);
+            .MethodName, _lookahead.ValueType, guardChoices: true));
 
         if (context.DiscardResult)
         {

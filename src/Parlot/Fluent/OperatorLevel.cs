@@ -109,7 +109,7 @@ internal sealed class OperatorLevel<T>
         for (var i = 0; i < operators.Length; i++)
         {
             var (op, factory) = operators[i];
-            parsers[i] = new OperatorIndex<TInput>(op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName), first + i);
+            parsers[i] = OperatorIndex<TInput>.Wrap(op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName), first + i);
             factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
         }
 

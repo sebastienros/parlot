@@ -9,6 +9,8 @@ namespace Parlot.Fluent;
 /// </summary>
 internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
+    private readonly bool _withoutValue;
+
     public bool CanSeek { get; set; }
 
     public char[] ExpectedChars { get; set; }
@@ -23,6 +25,7 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnal
         ExpectedChars = SeekableHints.ExpectedChars(expectedChars);
         SkipWhitespace = skipWhiteSpace;
         CanSeek = true;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
@@ -35,6 +38,18 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnal
         context.EnterParser(this);
 
         var success = Parser.Parse(context, ref result);
+
+        context.ExitParser(this);
+        return success;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var success = _withoutValue ? Parser.ParseWithoutValue(context, ref result) : Parser.Parse(context, ref result);
 
         context.ExitParser(this);
         return success;

@@ -1,6 +1,7 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Runtime.CompilerServices;
 #if NET8_0_OR_GREATER
 using System.Buffers;
 #endif
@@ -13,33 +14,61 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
     private readonly bool _canBeEmpty;
     private readonly bool _failOnEof;
     private readonly bool _consumeDelimiter;
-    private readonly bool _canJumpToNextExpectedChar;
-    private readonly char[]? _expectedChars;
+    private readonly bool _delimiterWithoutValue;
+    private ForwardedHints? _delimiterHints;
+    private JumpTarget? _jumpTarget;
+
+    private sealed class JumpTarget
+    {
+        public JumpTarget(ForwardedHints hints, char[]? expectedChars)
+        {
+            Hints = hints;
+            ExpectedChars = expectedChars;
 #if NET8_0_OR_GREATER
-    private readonly SearchValues<char>? _expectedSearchValues;
+            if (expectedChars is not null)
+            {
+                ExpectedSearchValues = SearchValues.Create(expectedChars);
+            }
 #endif
+        }
+
+        public ForwardedHints Hints { get; }
+        public char[]? ExpectedChars { get; }
+#if NET8_0_OR_GREATER
+        public SearchValues<char>? ExpectedSearchValues { get; }
+#endif
+    }
+
     public TextBefore(Parser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
     {
         _delimiter = delimiter ?? throw new ArgumentNullException(nameof(delimiter));
         _canBeEmpty = canBeEmpty;
         _failOnEof = failOnEof;
         _consumeDelimiter = consumeDelimiter;
+        _delimiterWithoutValue = _delimiter.CanParseWithoutValue;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private JumpTarget ResolveJumpTarget()
+    {
+        var hints = ForwardedHints.Get(ref _delimiterHints, _delimiter);
+        var current = _jumpTarget;
+
+        if (current is not null && ReferenceEquals(current.Hints, hints))
+        {
+            return current;
+        }
 
         // The text is searched for the chars the delimiter can start with, unless it can start somewhere else:
         // - with a white space, which is skipped before the expected chars
         // - with any char, which a OneOf with parsers that are not seekable declares with OtherSeekableChar
         // - with any non-ASCII char, declared with NonAsciiSeekableChar
-        if (_delimiter is ISeekable seekable
-            && seekable.CanSeek
-            && !seekable.SkipWhitespace
-            && SeekableHints.IsExact(seekable.ExpectedChars))
-        {
-            _expectedChars = seekable.ExpectedChars;
-#if NET8_0_OR_GREATER
-            _expectedSearchValues = SearchValues.Create(seekable.ExpectedChars);
-#endif
-            _canJumpToNextExpectedChar = true;
-        }
+        var target = hints.CanSeek && !hints.SkipWhitespace && SeekableHints.IsExact(hints.ExpectedChars)
+            ? new JumpTarget(hints, hints.ExpectedChars)
+            : new JumpTarget(hints, null);
+
+        _jumpTarget = target;
+        return target;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -67,17 +96,21 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         var recorded = context.Scanner.Cursor.RecordedFailure;
 
         var parsed = new ParseResult<T>();
+        var jump = _jumpTarget ?? ResolveJumpTarget();
 
         while (true)
         {
-            if (_canJumpToNextExpectedChar)
-            {
 #if NET8_0_OR_GREATER
-                JumpToNextExpectedChar(context, _expectedSearchValues!);
-#else
-                JumpToNextExpectedChar(context, _expectedChars!);
-#endif
+            if (jump.ExpectedSearchValues is { } searchValues)
+            {
+                JumpToNextExpectedChar(context, searchValues);
             }
+#else
+            if (jump.ExpectedChars is { } expectedChars)
+            {
+                JumpToNextExpectedChar(context, expectedChars);
+            }
+#endif
 
             var previous = context.Scanner.Cursor.Offset;
 
@@ -106,7 +139,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
                 return true;
             }
 
-            var delimiterFound = _delimiter.Parse(context, ref parsed);
+            var delimiterFound = _delimiterWithoutValue ? _delimiter.ParseWithoutValue(context, ref parsed) : _delimiter.Parse(context, ref parsed);
 
             if (delimiterFound)
             {
@@ -245,9 +278,11 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         result.Body.Add("while (true)");
         result.Body.Add("{");
 
-        if (_canJumpToNextExpectedChar)
+        var jump = ResolveJumpTarget();
+
+        if (jump.ExpectedChars is { } expectedChars)
         {
-            GenerateJumpToNextExpectedChar(context, result, _expectedChars!);
+            GenerateJumpToNextExpectedChar(context, result, expectedChars);
         }
 
         result.Body.Add($"    var {previousName} = {cursorName}.Offset;");
