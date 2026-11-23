@@ -1250,6 +1250,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // An entry point returning the grammar errors and warnings collects them rather than throwing
         sgContext.CollectDiagnostics = standalone.CollectsDiagnostics;
 
+        // Only emit cancellation checks when the entry point takes a CancellationToken
+        sgContext.SupportsCancellation = standalone.CancellationTokenParameter is not null;
+
         // The recursion limit of the attribute, like ParseContext.MaxRecursionDepth
         if (standalone.MaxRecursionDepth < 0)
         {
@@ -1370,7 +1373,8 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // We need to do this before emitting lambda fields
         // CountsRecursion: whether entering the helper is one level of the recursion limit, true for the Deferred parsers.
         // The other parsers (Unary) count their own invocations.
-        var deferredMethods = new List<(string MethodName, string ValueTypeName, SourceResult Result, string? ParserName, bool CountsRecursion)>();
+        // ElideLoopDetection: whether LoopAnalysis proved this Deferred parser cannot left-recurse at the same offset.
+        var deferredMethods = new List<(string MethodName, string ValueTypeName, SourceResult Result, string? ParserName, bool CountsRecursion, bool ElideLoopDetection)>();
         var processedDeferred = new HashSet<object>(ReferenceComparer.Instance);
         var deferredToProcess = sgContext.Deferred.Enumerate().ToList();
 
@@ -1421,6 +1425,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             // For other parsers (like Unary<T>), generate source for the parser itself
             SourceResult deferredResult;
             var isDeferred = parserType.IsGenericType && parserType.GetGenericTypeDefinition().Name == "Deferred`1";
+            var elideLoopDetection = false;
             if (isDeferred)
             {
                 // Get the inner parser from the Deferred
@@ -1435,6 +1440,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 {
                     continue;
                 }
+
+                // Check LoopAnalysis on the complete grammar graph to see whether left-recursion tracking can be elided
+                elideLoopDetection = parserType
+                    .GetProperty("IsLoopDetectionElided", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.GetValue(parser) is true;
 
                 // Generate source for the inner parser
                 deferredResult = innerSourceable.GenerateSource(sgContext);
@@ -1455,7 +1465,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 deferredResult = sourceable.GenerateSource(sgContext);
             }
 
-            deferredMethods.Add((deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName, isDeferred));
+            deferredMethods.Add((deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName, isDeferred, elideLoopDetection));
 
             // Check for new deferred parsers that were added
             foreach (var newDeferred in sgContext.Deferred.Enumerate())
@@ -1466,6 +1476,16 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 }
             }
         }
+
+        // A custom whitespace parser that can reach a Deferred parser before reading can create a cycle outside the
+        // grammar graph analyzed by LoopAnalysis, so keep loop detection on every Deferred parser conservatively.
+        var hasReentrantWhiteSpaceParser = typeof(SourceGenerationContext)
+            .GetProperty("HasReentrantWhiteSpaceParser", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.GetValue(sgContext) is true;
+        var trackedDeferredCount = hasReentrantWhiteSpaceParser
+            ? deferredMethods.Count
+            : deferredMethods.Count(static d => !d.ElideLoopDetection);
+        var wrapperIsContext = trackedDeferredCount > 0 || limitRecursion;
 
         // Collect helper methods (OneOf, etc.) after all parsers/deferred have been processed
         var helperMethods = sgContext.Helpers.Enumerate().ToList();
@@ -1549,7 +1569,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             sb.AppendLine("            }");
             sb.AppendLine();
         }
-        else if (deferredMethods.Count > 0 || limitRecursion)
+        else if (wrapperIsContext)
         {
             // The context carries the per-parse state of the deferred parsers (see the deferred helpers below) and returns
             // the recursion limit, so the entry point creates this subclass. The parser methods remain static.
@@ -1663,7 +1683,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         }
         sb.AppendLine($"        internal {staticModifier}bool {coreName}(global::Parlot.Fluent.ParseContext context, ref global::Parlot.ParseResult<{valueTypeName}> result)");
         sb.AppendLine("        {");
-        sb.AppendLine("            context.CheckCancellation();");
+        if (sgContext.SupportsCancellation)
+        {
+            sb.AppendLine("            context.CheckCancellation();");
+        }
         sb.AppendLine("            var scanner = context.Scanner;");
         sb.AppendLine("            var cursor = scanner.Cursor;");
 
@@ -1745,13 +1768,13 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
 
         // Emit helper methods for deferred parsers (already processed earlier)
-        if (deferredMethods.Count > 0)
+        if (trackedDeferredCount > 0)
         {
             sb.AppendLine();
             sb.AppendLine("        // The offset at which each deferred parser is active, -1 when it isn't. Within one invocation the cursor");
             sb.AppendLine("        // never moves before its entry offset, so a nested entry at that same offset is left recursion, which");
             sb.AppendLine("        // fails instead of overflowing the stack. The runtime's Deferred detects the same cycle.");
-            for (var i = 0; i < deferredMethods.Count; i++)
+            for (var i = 0; i < trackedDeferredCount; i++)
             {
                 sb.AppendLine($"        private int __parlotDeferred{i} = -1;");
             }
@@ -1765,71 +1788,153 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         }
 
         var deferredIndex = 0;
-        foreach (var (deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName, countsRecursion) in deferredMethods)
+        foreach (var (deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName, countsRecursion, elideLoopDetection) in deferredMethods)
         {
-            var stateField = $"__parlotDeferred{deferredIndex++}";
-            var stateExpression = hasParameters ? "this" : $"(({wrapperName})context)";
+            var trackLoop = hasReentrantWhiteSpaceParser || !elideLoopDetection;
+            var countRecursion = limitRecursion && countsRecursion;
+            var bodyContainsReturn = deferredResult.Body.Any(stmt => stmt.TrimStart().StartsWith("return ", StringComparison.Ordinal));
+
             sb.AppendLine();
             // Add parser name as comment if available
             if (!string.IsNullOrEmpty(deferredParserName))
             {
                 sb.AppendLine($"        // {deferredParserName}");
             }
-            sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            var state = {stateExpression};");
-            sb.AppendLine("            var offset = context.Scanner.Cursor.Offset;");
-            sb.AppendLine($"            if (state.{stateField} == offset)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                value = default!;");
-            sb.AppendLine("                return false;");
-            sb.AppendLine("            }");
-            sb.AppendLine();
-            // Deep input fails the parse instead of overflowing the stack, and so does exceeding the limit. Both throw, and
-            // the context isn't used again, so nothing is restored then.
-            sb.AppendLine("            context.EnsureSufficientStack();");
-            var countRecursion = limitRecursion && countsRecursion;
-            if (countRecursion)
-            {
-                sb.AppendLine($"            context.EnterRecursion({sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
-            }
-            sb.AppendLine($"            var previous = state.{stateField};");
-            sb.AppendLine($"            state.{stateField} = offset;");
-            sb.AppendLine($"            var success = {deferredMethodName}_Core(context, out value);");
-            sb.AppendLine($"            state.{stateField} = previous;");
-            if (countRecursion)
-            {
-                sb.AppendLine("            context.ExitRecursion();");
-            }
-            sb.AppendLine("            return success;");
-            sb.AppendLine("        }");
-            sb.AppendLine();
-            sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}_Core(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            context.CheckCancellation();");
-            sb.AppendLine("            var scanner = context.Scanner;");
-            sb.AppendLine("            var cursor = scanner.Cursor;");
-            sb.AppendLine();
 
-            foreach (var local in deferredResult.Locals)
+            if (trackLoop)
             {
-                sb.Append("            ").AppendLine(local);
-            }
-
-            foreach (var stmt in deferredResult.Body)
-            {
-                sb.Append("            ").AppendLine(stmt);
-            }
-
-            // Only add final return if the body doesn't already contain returns (e.g., optimized literal parsers use early returns)
-            var bodyContainsReturn = deferredResult.Body.Any(stmt => stmt.TrimStart().StartsWith("return ", StringComparison.Ordinal));
-            if (!bodyContainsReturn)
-            {
+                var stateField = $"__parlotDeferred{deferredIndex++}";
+                var stateExpression = hasParameters ? "this" : $"(({wrapperName})context)";
+                sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var state = {stateExpression};");
+                sb.AppendLine("            var offset = context.Scanner.Cursor.Offset;");
+                sb.AppendLine($"            if (state.{stateField} == offset)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                value = default!;");
+                sb.AppendLine("                return false;");
+                sb.AppendLine("            }");
                 sb.AppendLine();
-                sb.AppendLine($"            value = {deferredResult.ValueVariable};");
-                sb.AppendLine($"            return {deferredResult.SuccessVariable};");
+                // Deep input fails the parse instead of overflowing the stack, and so does exceeding the limit. Both throw, and
+                // the context isn't used again, so nothing is restored then.
+                sb.AppendLine("            context.EnsureSufficientStack();");
+                if (countRecursion)
+                {
+                    sb.AppendLine($"            context.EnterRecursion({sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+                }
+                sb.AppendLine($"            var previous = state.{stateField};");
+                sb.AppendLine($"            state.{stateField} = offset;");
+                sb.AppendLine($"            var success = {deferredMethodName}_Core(context, out value);");
+                sb.AppendLine($"            state.{stateField} = previous;");
+                if (countRecursion)
+                {
+                    sb.AppendLine("            context.ExitRecursion();");
+                }
+                sb.AppendLine("            return success;");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+                sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}_Core(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
+                sb.AppendLine("        {");
+                if (sgContext.SupportsCancellation)
+                {
+                    sb.AppendLine("            context.CheckCancellation();");
+                }
+                sb.AppendLine("            var scanner = context.Scanner;");
+                sb.AppendLine("            var cursor = scanner.Cursor;");
+                sb.AppendLine();
+
+                foreach (var local in deferredResult.Locals)
+                {
+                    sb.Append("            ").AppendLine(local);
+                }
+
+                foreach (var stmt in deferredResult.Body)
+                {
+                    sb.Append("            ").AppendLine(stmt);
+                }
+
+                if (!bodyContainsReturn)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine($"            value = {deferredResult.ValueVariable};");
+                    sb.AppendLine($"            return {deferredResult.SuccessVariable};");
+                }
+                sb.AppendLine("        }");
             }
-            sb.AppendLine("        }");
+            else if (countRecursion && bodyContainsReturn)
+            {
+                // Early returns in the body require a wrapper to decrement recursion depth without a try/finally.
+                sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            context.EnsureSufficientStack();");
+                sb.AppendLine($"            context.EnterRecursion({sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+                sb.AppendLine($"            var success = {deferredMethodName}_Core(context, out value);");
+                sb.AppendLine("            context.ExitRecursion();");
+                sb.AppendLine("            return success;");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+                sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}_Core(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
+                sb.AppendLine("        {");
+                if (sgContext.SupportsCancellation)
+                {
+                    sb.AppendLine("            context.CheckCancellation();");
+                }
+                sb.AppendLine("            var scanner = context.Scanner;");
+                sb.AppendLine("            var cursor = scanner.Cursor;");
+                sb.AppendLine();
+
+                foreach (var local in deferredResult.Locals)
+                {
+                    sb.Append("            ").AppendLine(local);
+                }
+
+                foreach (var stmt in deferredResult.Body)
+                {
+                    sb.Append("            ").AppendLine(stmt);
+                }
+
+                sb.AppendLine("        }");
+            }
+            else
+            {
+                // LoopAnalysis proved this Deferred cannot left-recurse: collapse the trampoline into a single method.
+                sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            context.EnsureSufficientStack();");
+                if (countRecursion)
+                {
+                    sb.AppendLine($"            context.EnterRecursion({sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+                }
+                if (sgContext.SupportsCancellation)
+                {
+                    sb.AppendLine("            context.CheckCancellation();");
+                }
+                sb.AppendLine("            var scanner = context.Scanner;");
+                sb.AppendLine("            var cursor = scanner.Cursor;");
+                sb.AppendLine();
+
+                foreach (var local in deferredResult.Locals)
+                {
+                    sb.Append("            ").AppendLine(local);
+                }
+
+                foreach (var stmt in deferredResult.Body)
+                {
+                    sb.Append("            ").AppendLine(stmt);
+                }
+
+                if (!bodyContainsReturn)
+                {
+                    sb.AppendLine();
+                    if (countRecursion)
+                    {
+                        sb.AppendLine("            context.ExitRecursion();");
+                    }
+                    sb.AppendLine($"            value = {deferredResult.ValueVariable};");
+                    sb.AppendLine($"            return {deferredResult.SuccessVariable};");
+                }
+                sb.AppendLine("        }");
+            }
         }
 
         // Emit helper methods registered via ParserHelperRegistry (e.g., OneOf buckets)
@@ -1853,7 +1958,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             }
             sb.AppendLine($"        private {staticModifier}bool {implementationName}(global::Parlot.Fluent.ParseContext context, out {helperValueTypeName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            context.CheckCancellation();");
+            if (sgContext.SupportsCancellation)
+            {
+                sb.AppendLine("            context.CheckCancellation();");
+            }
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
             sb.AppendLine();
@@ -1873,8 +1981,8 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             if (!bodyContainsReturn)
             {
                 sb.AppendLine();
-            sb.AppendLine($"            value = {helperResult.ValueVariable};");
-            sb.AppendLine($"            return {helperResult.SuccessVariable};");
+                sb.AppendLine($"            value = {helperResult.ValueVariable};");
+                sb.AppendLine($"            return {helperResult.SuccessVariable};");
             }
             sb.AppendLine("        }");
         }
@@ -1883,11 +1991,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0 || limitRecursion);
+        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: wrapperIsContext);
         foreach (var overload in standalone.FailureOverloads)
         {
             sb.AppendLine();
-            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0 || limitRecursion);
+            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: wrapperIsContext);
         }
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)

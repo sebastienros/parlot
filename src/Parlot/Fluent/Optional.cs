@@ -129,22 +129,25 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
         //     value = new Option<T>();
         // }
         // success = true; (always succeeds)
-        var innerValueName = $"innerValue{context.NextNumber()}";
-        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {innerValueName})");
-        result.Body.Add($"if ({success})");
-        result.Body.Add("{");
-        if (!context.DiscardResult)
+        if (context.DiscardResult)
         {
+            var pin = context.Pin(result);
+            result.Body.Add($"{helperName}({context.ParseContextName}, out _);");
+            context.Unpin(result, pin);
+        }
+        else
+        {
+            var innerValueName = $"innerValue{context.NextNumber()}";
+            var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {innerValueName})");
+            result.Body.Add($"if ({success})");
+            result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>({innerValueName});");
-        }
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        if (!context.DiscardResult)
-        {
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>();");
+            result.Body.Add("}");
         }
-        result.Body.Add("}");
         result.Body.Add($"{result.SuccessVariable} = true;");
 
         return result;

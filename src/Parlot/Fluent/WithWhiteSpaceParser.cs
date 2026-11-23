@@ -134,6 +134,11 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
             throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable whitespace parser.");
         }
 
+        if (IsWhiteSpaceParserReentrant())
+        {
+            context.HasReentrantWhiteSpaceParser = true;
+        }
+
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));

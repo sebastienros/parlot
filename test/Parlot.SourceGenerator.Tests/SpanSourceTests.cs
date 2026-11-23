@@ -474,13 +474,13 @@ public class SpanSourceTests
         Assert.Single(Regex.Matches(body, @"goto failRead\d+;"));
 
         // The tokens of a choice which skipped the white space for them fail where they started, and the choice, after
-        // that white space, when its last one isn't found
+        // that white space, when its last one isn't found (emitted for the first item and for the rest local function)
         body = Generate(ZeroOrMany(OneOf(Terms.Text("a").Then(static _ => 1), Terms.Text("bc").Then(static _ => 2), Terms.Text("d").Then(static _ => 3))), context);
 
-        Assert.Equal(2, Regex.Matches(body, @"goto alternative\d+;").Count);
+        Assert.Equal(4, Regex.Matches(body, @"goto alternative\d+;").Count);
         Assert.DoesNotContain("goto alternativeRead", body, StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(body, @"goto itemFailRead\d+;"));
-        Assert.Single(Regex.Matches(body, @"RecordFailure\("));
+        Assert.Equal(2, Regex.Matches(body, @"goto itemFailRead\d+;").Count);
+        Assert.Equal(2, Regex.Matches(body, @"RecordFailure\(").Count);
 
         // Parsers which fail where they started record nothing
         body = Generate(ZeroOrMany(OneOf(Literals.Text("a"), Literals.Text("bc"), Literals.Text("d"))), context);
@@ -502,8 +502,8 @@ public class SpanSourceTests
         Assert.Contains("context.SkipWhiteSpace();", first, StringComparison.Ordinal);
         Assert.DoesNotContain("RecordedFailure", first, StringComparison.Ordinal);
 
-        // Its own white space, which was skipped already, and the one before its second text
-        Assert.Equal(2, Regex.Matches(body.Substring(first.Length), @"recorded\d+ = cursor\.RecordedFailure;\s+cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+cursor\.RestoreRecordedFailure\(recorded\d+\);\s+context\.SkipWhiteSpace\(\);").Count);
+        // The second alternative's own leading white space is elided (already skipped by Longest); the one before its second text keeps the recorded failure
+        Assert.Single(Regex.Matches(body.Substring(first.Length), @"recorded\d+ = cursor\.RecordedFailure;\s+cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+cursor\.RestoreRecordedFailure\(recorded\d+\);\s+context\.SkipWhiteSpace\(\);"));
         Assert.DoesNotMatch(@"cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+context\.SkipWhiteSpace\(\);", body.Substring(first.Length));
     }
 

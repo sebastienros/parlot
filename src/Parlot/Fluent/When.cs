@@ -168,11 +168,13 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         // like a capture or a lookahead.
         var skipsWhiteSpace = _parser is ISeekable { SkipWhitespace: true };
         var valueStartName = $"valueStart{context.NextNumber()}";
+        var skippedBefore = false;
 
         if (skipsWhiteSpace && context.IsCompacting)
         {
             if (LeadingWhiteSpace.CanSkipBefore(_parser))
             {
+                skippedBefore = true;
                 result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
                 result.Body.Add("{");
                 result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
@@ -226,14 +228,16 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         {
             result.Body.Add($"        {cursorName}.RecordFailure({(skipsWhiteSpace ? valueStartName : startName)}{reason});");
         }
-        result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");
         result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add($"    {result.SuccessVariable} = false;");
-        result.Body.Add("}");
+        if (skippedBefore)
+        {
+            // White space was skipped before invoking the inner parser, so give it back on failure
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
 
         return result;
     }

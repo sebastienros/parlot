@@ -43,7 +43,7 @@ internal static class TextChoiceSource
 
         body.Add("value = default;");
         body.Add("return false;");
-        body.Add("static string MatchText(System.ReadOnlySpan<char> text)");
+        body.Add("static string MatchText(global::System.ReadOnlySpan<char> text)");
         body.Add("{");
         body.Add(KnownStringLookup.GeneratePrefixes(texts));
         body.Add("}");

@@ -168,63 +168,87 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
 
         result.Body.Add($"{result.SuccessVariable} = false;");
 
-        var helperName = context.Helpers
+        var rawHelperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        // An element isn't parsed when it can't start at the current position
-        helperName = SeekGuard.GetHelper(context, _parser, helperName, typeof(T));
+        // Subsequent elements aren't parsed when they can't start at the current position (matching runtime Parse)
+        var guardedHelperName = _max == 1 ? rawHelperName : SeekGuard.GetHelper(context, _parser, rawHelperName, typeof(T));
 
         if (!context.DiscardResult && !context.IsCompacting)
         {
-            ListBuilderSource.EmitFirstItemThenRest(context, result, helperName, elementTypeName, _max);
+            ListBuilderSource.EmitFirstItemThenRest(context, result, rawHelperName, guardedHelperName, elementTypeName, _max);
             return result;
         }
 
+        var ctx = context.ParseContextName;
+        var cursor = context.CursorName;
         var listName = $"list{context.NextNumber()}";
-
-        if (!context.DiscardResult)
-        {
-            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
-        }
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
+        var firstItemName = $"firstItem{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";
+        var firstOutTarget = context.DiscardResult ? "_" : $"var {firstItemName}";
+        var nextOutTarget = context.DiscardResult ? "_" : $"var {itemValueName}";
 
-        if (_max > 0)
-        {
-            result.Body.Add($"int {countName} = 0;");
-        }
-        // Each element is read again from its start when it fails
-        var pin = context.Pin(result);
-        var bodyStart = result.Body.Count;
-        result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
+        result.Body.Add($"var {previousOffsetName} = {cursor}.Offset;");
+        result.Body.Add($"if ({rawHelperName}({ctx}, out {firstOutTarget}) && {cursor}.Offset != {previousOffsetName})");
         result.Body.Add("{");
-        result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
-        result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var {itemValueName}) || {context.CursorName}.Offset == {previousOffsetName})");
-        result.Body.Add("    {");
-        result.Body.Add("        break;");
-        result.Body.Add("    }");
-        context.MovePin(result, pin, "    ");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"    {listName}.Add({itemValueName});");
-        }
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        if (_max > 0)
+
+        if (_max == 1)
         {
-            result.Body.Add($"    {countName}++;");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {result.ValueVariable} = new {elementTypeName}[] {{ {firstItemName} }};");
+            }
         }
+        else
+        {
+            var bodyStart = -1;
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {ListBuilderSource.Declare(listName, elementTypeName)}");
+                result.Body.Add($"    {listName}.Add({firstItemName});");
+                bodyStart = result.Body.Count;
+            }
+            if (_max > 0)
+            {
+                result.Body.Add($"    int {countName} = 1;");
+            }
+            // Each subsequent element is read again from its start when it fails
+            string? pin = null;
+            if (context.IsCompacting)
+            {
+                pin = $"pin{context.NextNumber()}";
+                result.Body.Add($"    var {pin} = {ctx}.Pin();");
+            }
+            result.Body.Add(_max == 0 ? "    while (true)" : $"    while ({countName} < {_max})");
+            result.Body.Add("    {");
+            result.Body.Add($"        {previousOffsetName} = {cursor}.Offset;");
+            result.Body.Add($"        if (!{guardedHelperName}({ctx}, out {nextOutTarget}) || {cursor}.Offset == {previousOffsetName})");
+            result.Body.Add("        {");
+            result.Body.Add("            break;");
+            result.Body.Add("        }");
+            context.MovePin(result, pin, "        ");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"        {listName}.Add({itemValueName});");
+            }
+            if (_max > 0)
+            {
+                result.Body.Add($"        {countName}++;");
+            }
+            result.Body.Add("    }");
+            context.Unpin(result, pin, "    ");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {result.ValueVariable} = {listName}.ToArray();");
+                ListBuilderSource.ReleaseInFinally(result, bodyStart, listName, "    ");
+            }
+        }
+
         result.Body.Add("}");
-        context.Unpin(result, pin);
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"if ({result.SuccessVariable})");
-            result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName}.ToArray();");
-            result.Body.Add("}");
-            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
-        }
 
         return result;
     }

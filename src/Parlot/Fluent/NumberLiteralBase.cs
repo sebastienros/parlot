@@ -135,7 +135,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
 
         var resetName = $"reset{context.NextNumber()}";
         var numberSpanName = $"numberSpan{context.NextNumber()}";
-        var parsedValueName = $"parsedValue{context.NextNumber()}";
 
         // Use direct SourceResult construction for early return optimization
         var result = new SourceResult(
@@ -144,31 +143,29 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
             valueTypeName: valueTypeName);
 
         result.Body.Add($"var {resetName} = {cursorName}.Offset;");
-        result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
-        }
 
-        var (tryParseMethod, numberStylesFieldName, cultureExpr) = GetParseExpressions(context);
+        var (tryParseMethod, numberStylesExpr, cultureExpr) = GetParseExpressions(context);
 
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
         var numberOptionsExpr = $"(global::Parlot.Fluent.NumberOptions){(int)_numberOptions}";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({numberOptionsExpr}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        result.Body.Add($"if ({scannerName}.ReadDecimal({numberOptionsExpr}, out var {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (_allowUnderscore)
         {
             result.Body.Add($"    {numberSpanName} = global::Parlot.Numbers.RemoveUnderscores({numberSpanName});");
         }
-        var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
-        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
+        var outTarget = context.DiscardResult ? $"{valueTypeName} _" : result.ValueVariable;
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
         result.Body.Add("    {");
-        result.Body.Add($"        {result.ValueVariable} = {(context.DiscardResult ? "default" : parsedValueName)};");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = default;");
+        }
         result.Body.Add("        return true;");
         result.Body.Add("    }");
+        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
         result.Body.Add("}");
-        result.Body.Add($"{cursorName}.ResetPosition({resetName});");
         result.Body.Add($"{result.ValueVariable} = default;");
         result.Body.Add("return false;");
 
@@ -188,24 +185,22 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
 
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        // Emit NumberStyles as a static readonly field
-        var numberStylesFieldName = context.RegisterStaticField(
-            $"private static readonly global::System.Globalization.NumberStyles",
-            $"(global::System.Globalization.NumberStyles){(int)_numberStyles}");
+        // Emit NumberStyles inline as a constant cast
+        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
 
-        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a static field
+        // Emit NumberFormatInfo directly to avoid CultureInfo.GetFormat lookup on every parse
         string cultureExpr;
         if (_culture == CultureInfo.InvariantCulture)
         {
-            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+            cultureExpr = "global::System.Globalization.NumberFormatInfo.InvariantInfo";
         }
         else
         {
             var decimalSeparator = $"((char){(int)_decimalSeparator}).ToString()";
             var groupSeparator = $"((char){(int)_groupSeparator}).ToString()";
             cultureExpr = context.RegisterStaticField(
-                "private static readonly global::System.Globalization.CultureInfo",
-                $"new global::System.Func<global::System.Globalization.CultureInfo>(() => {{ var c = (global::System.Globalization.CultureInfo)global::System.Globalization.CultureInfo.InvariantCulture.Clone(); c.NumberFormat.NumberDecimalSeparator = {decimalSeparator}; c.NumberFormat.NumberGroupSeparator = {groupSeparator}; return c; }})()");
+                "private static readonly global::System.Globalization.NumberFormatInfo",
+                $"new global::System.Func<global::System.Globalization.NumberFormatInfo>(() => {{ var c = (global::System.Globalization.NumberFormatInfo)global::System.Globalization.NumberFormatInfo.InvariantInfo.Clone(); c.NumberDecimalSeparator = {decimalSeparator}; c.NumberGroupSeparator = {groupSeparator}; return c; }})()");
         }
 
         // The helper is available in Parlot's net8.0+ assets. A net7.0 consumer selects
@@ -220,9 +215,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
                 ? "global::Parlot.Numbers.TryParse"
                 : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later and C# 11 or later.");
 
-        _parseExpressions = (context, tryParseMethod, numberStylesFieldName, cultureExpr);
+        _parseExpressions = (context, tryParseMethod, numberStylesExpr, cultureExpr);
 
-        return (tryParseMethod, numberStylesFieldName, cultureExpr);
+        return (tryParseMethod, numberStylesExpr, cultureExpr);
     }
 
     // Only the built-in number parsers can be generated, see GenerateSource. The code parsing the value is large, a

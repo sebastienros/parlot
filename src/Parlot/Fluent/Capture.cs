@@ -85,19 +85,24 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
-        var scannerName = context.ScannerName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.WithDiscardResult(true, () => context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Capture", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName);
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"{result.SuccessVariable} = {helperName}({context.ParseContextName}, out _);");
+            return result;
+        }
 
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
         var lengthName = $"length{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
-
-        // Use helper instead of inlining
-        var helperName = context.WithDiscardResult(true, () => context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Capture", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName);
 
         // if (Helper(context, out _))
         // {
