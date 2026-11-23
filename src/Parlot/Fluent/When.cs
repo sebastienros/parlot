@@ -143,7 +143,7 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         if (_parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("When requires a source-generatable parser.");
+            throw new NotSupportedException($"When requires a source-generatable parser, but {SourceGenerationContext.DescribeParser(_parser)} does not implement ISourceable.");
         }
 
         var result = context.CreateResult(typeof(T));

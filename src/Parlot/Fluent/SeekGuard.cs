@@ -245,7 +245,19 @@ internal sealed class SeekGuard
     }
 
     // The key of a guard's helper, distinct from the parser's own
-    private sealed record GuardKey(object Parser);
+    private sealed class GuardKey : IHelperKey
+    {
+        private readonly object _parser;
+
+        public GuardKey(object parser)
+        {
+            _parser = parser;
+        }
+
+        public override bool Equals(object? obj) => obj is GuardKey other && ReferenceEquals(other._parser, _parser);
+
+        public override int GetHashCode() => RuntimeHelpers.GetHashCode(_parser);
+    }
 
     /// <summary>
     /// The chars the parser can start with.

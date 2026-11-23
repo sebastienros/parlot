@@ -148,7 +148,8 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
         if (_before is not ISourceable beforeSourceable || _parser is not ISourceable parserSourceable || _after is not ISourceable afterSourceable)
         {
-            throw new NotSupportedException("Between requires all parsers to be source-generatable.");
+            var unsupported = _before is not ISourceable ? (object)_before : _parser is not ISourceable ? _parser : _after;
+            throw new NotSupportedException($"Between requires all parsers to be source-generatable, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)

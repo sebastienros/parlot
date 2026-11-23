@@ -322,7 +322,7 @@ public sealed class SourceGenerationContext
         return successName;
     }
 
-    private sealed class TokenKey
+    private sealed class TokenKey : IHelperKey
     {
         private readonly object _parser;
 
@@ -494,7 +494,15 @@ public sealed class SourceGenerationContext
         return fieldName;
     }
 
-    private sealed class ReferenceComparer : IEqualityComparer<object>
+    internal static string DescribeParser(object parser)
+    {
+        var typeName = parser.GetType().FullName ?? parser.GetType().Name;
+        return parser is Fluent.IParserText { Name: { Length: > 0 } name }
+            ? $"'{name}' ({typeName})"
+            : $"'{typeName}'";
+    }
+
+    internal sealed class ReferenceComparer : IEqualityComparer<object>
     {
         public static readonly ReferenceComparer Instance = new();
 

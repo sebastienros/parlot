@@ -8,7 +8,7 @@ namespace Parlot.SourceGeneration;
 /// </summary>
 public sealed class DeferredRegistry
 {
-    private readonly Dictionary<object, (string MethodName, string? ParserName)> _methods = new();
+    private readonly Dictionary<object, (string MethodName, string? ParserName)> _methods = new(SourceGenerationContext.ReferenceComparer.Instance);
 
     public string GetOrCreateMethodName(object parser, string suggestedName)
     {

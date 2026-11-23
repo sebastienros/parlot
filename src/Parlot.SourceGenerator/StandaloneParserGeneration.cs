@@ -627,7 +627,7 @@ public sealed partial class ParserSourceGenerator
         MethodToGenerate factory, List<SyntaxTree> grammarTrees, INamedTypeSymbol? cancellationTokenType,
         INamedTypeSymbol? textReaderType, out string error)
     {
-        error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
+        const string usageHint = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
             + "Other overloads with the same name may take a TextReader instead of the string, or add a last "
             + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics, "
@@ -635,11 +635,30 @@ public sealed partial class ParserSourceGenerator
             + "whether the input is nested too deeply: out (int Offset, bool NestedTooDeeply) or "
             + "out (int Offset, int Line, int Column, bool NestedTooDeeply), and an object before the bool, or last, receiving "
             + "the reason recorded with the failure: out (int Offset, object? Reason) or out (int Offset, int Line, int Column, object? Reason).";
+        error = usageHint;
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
-        if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
-            || type.TypeKind != TypeKind.Class || type.IsRecord)
+        if (string.IsNullOrWhiteSpace(name))
         {
+            error = "Missing entry point name. " + usageHint;
+            return null;
+        }
+
+        if (type.ContainingType is not null)
+        {
+            error = $"Containing type '{type.Name}' must be a top-level class; nested types are not supported for standalone entry points.";
+            return null;
+        }
+
+        if (type.IsGenericType)
+        {
+            error = $"Containing type '{type.Name}' must not be generic.";
+            return null;
+        }
+
+        if (type.TypeKind != TypeKind.Class || type.IsRecord)
+        {
+            error = $"Containing type '{type.Name}' must be a non-record partial class.";
             return null;
         }
 
@@ -650,7 +669,8 @@ public sealed partial class ParserSourceGenerator
             return null;
         }
 
-        var candidates = type.GetMembers(name!).OfType<IMethodSymbol>()
+        var namedMethods = type.GetMembers(name!).OfType<IMethodSymbol>().ToArray();
+        var candidates = namedMethods
             .Select(method =>
             {
                 var collects = HasDiagnosticsOutput(method, factory.Method, resultType);
@@ -680,11 +700,34 @@ public sealed partial class ParserSourceGenerator
             })
             .ToArray();
 
+        if (candidates.Length == 0)
+        {
+            if (namedMethods.Length == 0)
+            {
+                error = $"No partial method named '{name}' was found on '{type.Name}'. " + usageHint;
+            }
+            else if (namedMethods.All(static method => !method.IsStatic || !method.IsPartialDefinition || method.PartialImplementationPart is not null))
+            {
+                error = $"Method '{name}' on '{type.Name}' must be a static partial definition without an existing implementation. " + usageHint;
+            }
+            else if (namedMethods.All(method => method.DeclaringSyntaxReferences.Any(reference => grammarTrees.Contains(reference.SyntaxTree))))
+            {
+                error = $"Partial entry point '{name}' on '{type.Name}' must be declared in a regular source file, not in a grammar file. " + usageHint;
+            }
+            else
+            {
+                error = $"No overload of '{name}' on '{type.Name}' matches the expected entry point signature for result type '{resultType.ToDisplayString()}'. " + usageHint;
+            }
+
+            return null;
+        }
+
         // At most one entry point of each kind: string or TextReader input, returning the diagnostics, the furthest failure, or neither
-        if (candidates.Length == 0 || candidates
+        if (candidates
             .GroupBy(static candidate => (candidate.Method.Parameters[0].Type.SpecialType == SpecialType.System_String, candidate.Collects, candidate.Failure))
             .Any(static group => group.Count() > 1))
         {
+            error = $"Multiple '{name}' overloads on '{type.Name}' target the same input and output kind (for example, overloads differing only by CancellationToken). Declare at most one partial entry point of each kind.";
             return null;
         }
 

@@ -185,8 +185,9 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             }
         }
 
-        // Get location information for debugging support
-        var location = originalLambda.GetLocation();
+        // Get location information for debugging support from the body itself so Allman-style
+        // block lambdas map to the line where '{' starts rather than the parameter list line.
+        var location = originalLambda.Body.GetLocation();
         var lineSpan = location.GetLineSpan();
         var filePath = lineSpan.Path;
         var startLine = lineSpan.StartLinePosition.Line + 1; // Convert to 1-based

@@ -107,7 +107,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 
         if (Parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("SkipWhiteSpace requires a source-generatable parser.");
+            throw new NotSupportedException($"SkipWhiteSpace requires a source-generatable parser, but {SourceGenerationContext.DescribeParser(Parser)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)

@@ -151,7 +151,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
 
         if (_parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("ZeroOrMany requires a source-generatable parser.");
+            throw new NotSupportedException($"ZeroOrMany requires a source-generatable parser, but {SourceGenerationContext.DescribeParser(_parser)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(IReadOnlyList<T>), context) is { } spanResult)

@@ -32,7 +32,7 @@ namespace Parlot.SourceGenerator;
 /// When applied to a class, the using directives will be included in all generated
 /// parsers within that class. These factories belong in build-only .parlot.cs files.
 /// </remarks>
-[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = false)]
+[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = true)]
 #if SOURCE_GENERATOR
 internal
 #else

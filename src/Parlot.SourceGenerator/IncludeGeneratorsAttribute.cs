@@ -56,7 +56,7 @@ namespace Parlot.SourceGenerator;
 /// When applied to a class, the generators will be run for all generated parsers within that class.
 /// These factories belong in build-only .parlot.cs files with matching partial parsing declarations.
 /// </remarks>
-[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = false)]
+[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = true)]
 #if SOURCE_GENERATOR
 internal
 #else
