@@ -222,8 +222,11 @@ public abstract partial class Parser<T>
 
     private (bool Success, T? Value) ParseText(string text, StreamParseOptions? options, CancellationToken cancellationToken)
     {
+        var effectiveOptions = options ?? StreamParseOptions.Default;
+        effectiveOptions.Validate();
+
         var scanner = new Scanner(text);
-        var context = options?.ContextFactory?.Invoke(scanner, cancellationToken) ?? new ParseContext(scanner, cancellationToken);
+        var context = effectiveOptions.CreateContext(scanner, cancellationToken);
         var result = new ParseResult<T>();
 
         return Parse(context, ref result) ? (true, result.Value) : (false, default);

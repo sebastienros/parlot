@@ -60,7 +60,7 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISource
 
         if (_parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("LeftAssociative requires all operator parsers to be source-generatable.");
+            throw new NotSupportedException($"OperatorIndex requires a source-generatable operator parser, but {SourceGenerationContext.DescribeParser(_parser)} does not implement ISourceable.");
         }
 
         var result = context.CreateResult(typeof(int));

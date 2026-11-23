@@ -45,15 +45,7 @@ internal sealed class StreamingDriver : IDisposable
         _options = options ?? StreamParseOptions.Default;
         _cancellationToken = cancellationToken;
 
-        if (_options.BufferSize <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(options), "BufferSize must be positive.");
-        }
-
-        if (_options.MaxBufferedCharacters <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(options), "MaxBufferedCharacters must be positive.");
-        }
+        _options.Validate();
 
         _chars = [];
         Context = CreateContext("", isFinal: false);
@@ -332,12 +324,7 @@ internal sealed class StreamingDriver : IDisposable
     private ParseContext CreateContext(string text, bool isFinal)
     {
         var scanner = new Scanner(text, new TextPosition(0, _line, _column), isFinal);
-        var context = _options.ContextFactory?.Invoke(scanner, _cancellationToken) ?? new ParseContext(scanner, _cancellationToken);
-
-        if (context.Scanner != scanner)
-        {
-            throw new InvalidOperationException("The ContextFactory must return a context using the provided scanner.");
-        }
+        var context = _options.CreateContext(scanner, _cancellationToken);
 
         scanner.Cursor.SetCharBeforeBuffer(_charBefore);
 
@@ -380,8 +367,6 @@ internal sealed class StreamingItemReader<T, TSeparator>
         _separator = separator;
         _skipWhiteSpace = driver.Options.SkipWhiteSpace;
     }
-
-    public long Count { get; private set; }
 
     /// <summary>
     /// The offset to retry from when <see cref="Next(out T)"/> returns <see cref="StreamingStep.NeedMore"/>.
@@ -515,7 +500,6 @@ internal sealed class StreamingItemReader<T, TSeparator>
             }
 
             _expectSeparator = _separator != null;
-            Count++;
             value = result.Value;
             return StreamingStep.Item;
         }

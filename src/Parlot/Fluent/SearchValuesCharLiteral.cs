@@ -6,7 +6,7 @@ using System.Buffers;
 
 namespace Parlot.Fluent;
 
-internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
+internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     private readonly SearchValues<char> _searchValues;
     private readonly string? _valuesString;
@@ -98,116 +98,28 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
     public override string ToString() => $"AnyOf({_searchValues})";
 
+    private (SourceGenerationContext Context, string FieldName, bool UseAsciiBitsetFallback)? _fields;
+
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
-        ThrowHelper.ThrowIfNull(context, nameof(context));
-
-        if (context.IsCompacting)
-        {
-            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
-        }
-
-        // We can only generate source if we have the original values string
         if (_valuesString == null)
         {
             throw new InvalidOperationException("SearchValuesCharLiteral created from SearchValues<char> cannot generate source. Use the ReadOnlySpan<char> overload instead.");
         }
 
-        var cursorName = context.CursorName;
-        var scannerName = context.ScannerName;
-        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(TextSpan));
+        return CharListSource.GenerateSource(this, _valuesString, _minSize, _maxSize, _negate, ref _fields, context);
+    }
 
-        // Escape the values string for use in generated code
-        var escapedValues = LiteralHelper.EscapeStringContent(_valuesString);
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => _valuesString != null ? 1 : -1;
 
-        // Generate a unique field name base
-        var fieldNum = context.NextNumber();
-        var fieldName = $"_{context.MethodNamePrefix}_anyof{fieldNum}";
-
-        // Register conditional static fields for both NET8+ (SearchValues) and older frameworks (HashSet)
-        context.StaticFields.Add($"#if NET8_0_OR_GREATER");
-        context.StaticFields.Add($"private static readonly global::System.Buffers.SearchValues<char> {fieldName} = global::System.Buffers.SearchValues.Create(\"{escapedValues}\");");
-        context.StaticFields.Add($"#else");
-        context.StaticFields.Add($"private static readonly global::System.Collections.Generic.HashSet<char> {fieldName} = new global::System.Collections.Generic.HashSet<char>(\"{escapedValues}\");");
-        context.StaticFields.Add($"#endif");
-
-        // Use direct SourceResult construction for early return optimization
-        var result = new SourceResult(
-            successVariable: "success",
-            valueVariable: "value",
-            valueTypeName: valueTypeName);
-
-        var spanVarNum = context.NextNumber();
-        result.Body.Add($"var span{spanVarNum} = {cursorName}.Span;");
-        var spanVar = $"span{spanVarNum}";
-
-        var startVarNum = context.NextNumber();
-        result.Body.Add($"var start{startVarNum} = {cursorName}.Offset;");
-        var startVar = $"start{startVarNum}";
-
-        var sizeVarNum = context.NextNumber();
-        var sizeVar = $"size{sizeVarNum}";
-
-        // Generate both NET8+ (SearchValues with IndexOfAny/IndexOfAnyExcept) and older framework code
-        result.Body.Add($"#if NET8_0_OR_GREATER");
-
-        // NET8+ path: use IndexOfAny/IndexOfAnyExcept for efficient matching
-        if (_maxSize > 0)
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        if (_valuesString == null)
         {
-            result.Body.Add($"var searchSpan{spanVarNum} = {spanVar}.Length > {_maxSize} ? {spanVar}.Slice(0, {_maxSize}) : {spanVar};");
-            var searchSpan = $"searchSpan{spanVarNum}";
-            var indexMethod = _negate ? "IndexOfAny" : "IndexOfAnyExcept";
-            result.Body.Add($"var index{sizeVarNum} = {searchSpan}.{indexMethod}({fieldName});");
-            result.Body.Add($"var {sizeVar} = index{sizeVarNum} == -1 ? {searchSpan}.Length : index{sizeVarNum};");
-        }
-        else
-        {
-            var indexMethod = _negate ? "IndexOfAny" : "IndexOfAnyExcept";
-            result.Body.Add($"var index{sizeVarNum} = {spanVar}.{indexMethod}({fieldName});");
-            result.Body.Add($"var {sizeVar} = index{sizeVarNum} == -1 ? {spanVar}.Length : index{sizeVarNum};");
+            throw new InvalidOperationException("SearchValuesCharLiteral created from SearchValues<char> cannot generate source. Use the ReadOnlySpan<char> overload instead.");
         }
 
-        result.Body.Add($"#else");
-
-        // Pre-NET8 path: use loop with HashSet.Contains
-        result.Body.Add($"var {sizeVar} = 0;");
-        var maxLengthExpr = _maxSize > 0
-            ? $"global::System.Math.Min({spanVar}.Length, {_maxSize})"
-            : $"{spanVar}.Length";
-        var maxLengthVarNum = context.NextNumber();
-        result.Body.Add($"var maxLength{maxLengthVarNum} = {maxLengthExpr};");
-        var maxLengthVar = $"maxLength{maxLengthVarNum}";
-
-        result.Body.Add($"for (var i = 0; i < {maxLengthVar}; i++)");
-        result.Body.Add("{");
-
-        // For negate=false: break when char is NOT in the set (!Contains)
-        // For negate=true: break when char IS in the set (Contains)
-        var breakCondition = _negate
-            ? $"if ({fieldName}.Contains({spanVar}[i]))"
-            : $"if (!{fieldName}.Contains({spanVar}[i]))";
-        result.Body.Add($"    {breakCondition}");
-        result.Body.Add("    {");
-        result.Body.Add("        break;");
-        result.Body.Add("    }");
-        result.Body.Add($"    {sizeVar}++;");
-        result.Body.Add("}");
-
-        result.Body.Add($"#endif");
-
-        // Common code for both paths
-        result.Body.Add($"if ({sizeVar} < {_minSize})");
-        result.Body.Add("{");
-        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
-        result.Body.Add($"    {result.ValueVariable} = default;");
-        result.Body.Add("    return false;");
-        result.Body.Add("}");
-
-        result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
-        result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
-        result.Body.Add("return true;");
-
-        return result;
+        CharListSource.GenerateSpanSource(_valuesString, _minSize, _maxSize, _negate, ref _fields, writer, valueVariable, fail);
     }
 }
 #endif

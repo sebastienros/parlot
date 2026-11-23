@@ -52,4 +52,29 @@ public sealed class StreamParseOptions
     /// and shares it between the items read from the same text. Keep state that must outlive a context elsewhere.
     /// </remarks>
     public Func<Scanner, CancellationToken, ParseContext>? ContextFactory { get; set; }
+
+    internal void Validate()
+    {
+        if (BufferSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(BufferSize), "BufferSize must be positive.");
+        }
+
+        if (MaxBufferedCharacters <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxBufferedCharacters), "MaxBufferedCharacters must be positive.");
+        }
+    }
+
+    internal ParseContext CreateContext(Scanner scanner, CancellationToken cancellationToken)
+    {
+        var context = ContextFactory?.Invoke(scanner, cancellationToken) ?? new ParseContext(scanner, cancellationToken);
+
+        if (!ReferenceEquals(context.Scanner, scanner))
+        {
+            throw new InvalidOperationException("The ContextFactory must return a context using the provided scanner.");
+        }
+
+        return context;
+    }
 }

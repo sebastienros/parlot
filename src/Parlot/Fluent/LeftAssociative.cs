@@ -155,14 +155,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISeekablePrefixes, I
             .MethodName;
 
         // Generate first operand parsing using helper - use output parameter directly
-        if (context.DiscardResult)
-        {
-            result.Body.Add($"if ({baseHelperName}({ctx}, out _))");
-        }
-        else
-        {
-            result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
-        }
+        result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("{");
 
         // The operators are tried through the choice, which returns the index of the one it matched
@@ -350,15 +343,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISeekable
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_LeftAssocCtx{uniqueId}", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        if (context.DiscardResult)
-        {
-            result.Body.Add($"if ({baseHelperName}({ctx}, out _))");
-        }
-        else
-        {
-            result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
-        }
-
+        result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("{");
 
         // The operators are tried through the choice, which returns the index of the one it matched

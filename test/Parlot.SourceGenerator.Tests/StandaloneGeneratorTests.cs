@@ -230,7 +230,10 @@ public class StandaloneGeneratorTests
     [Fact]
     public void Small_Entry_Core_Can_Inline_Into_Public_Wrapper()
     {
-        var (result, compilation) = Generate(Declaration, Grammar.Replace(".Eof()", "", StringComparison.Ordinal));
+        var smallGrammar = Grammar
+            .Replace("Terms.Number", "Literals.Number", StringComparison.Ordinal)
+            .Replace(".Eof()", "", StringComparison.Ordinal);
+        var (result, compilation) = Generate(Declaration, smallGrammar);
         AssertNoErrors(result, compilation);
         var source = Assert.Single(result.Results.SelectMany(static result => result.GeneratedSources),
             static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
