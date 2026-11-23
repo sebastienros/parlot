@@ -504,7 +504,8 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         MethodToGenerate methodInfo,
         StandaloneEntryPoint standalone,
         int firstPointer,
-        Dictionary<SyntaxTree, SemanticModel>? semanticModels = null)
+        Dictionary<SyntaxTree, SemanticModel>? semanticModels = null,
+        (SyntaxTree RewrittenTree, LambdaRewriter Rewriter)? cachedRewrite = null)
     {
         var methodSymbol = methodInfo.Method;
 
@@ -555,14 +556,24 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
         // Only the recorded lambda sources depend on the factory, not the rewritten tree, so the
         // factories of one file share the tree when their rewriters start from the same pointer.
-        var rewriter = new LambdaRewriter(semanticModel, methodSymbol, firstPointer);
-        var rewrittenRoot = rewriter.Visit(originalSyntaxTree.GetRoot());
+        LambdaRewriter rewriter;
+        SyntaxTree rewrittenTree;
+        if (cachedRewrite is { } cached)
+        {
+            rewriter = cached.Rewriter;
+            rewrittenTree = cached.RewrittenTree;
+        }
+        else
+        {
+            rewriter = new LambdaRewriter(semanticModel, methodSymbol, firstPointer);
+            var rewrittenRoot = rewriter.Visit(originalSyntaxTree.GetRoot());
 
-        // Create a new syntax tree with the rewritten code
-        var rewrittenTree = CSharpSyntaxTree.Create(
-            (CSharpSyntaxNode)rewrittenRoot,
-            (CSharpParseOptions)originalSyntaxTree.Options,
-            originalSyntaxTree.FilePath);
+            // Create a new syntax tree with the rewritten code
+            rewrittenTree = CSharpSyntaxTree.Create(
+                (CSharpSyntaxNode)rewrittenRoot,
+                (CSharpParseOptions)originalSyntaxTree.Options,
+                originalSyntaxTree.FilePath);
+        }
 
         return new PreparedFactory(methodInfo, standalone, originalSyntaxTree, rewrittenTree, rewriter, semanticModel);
     }
@@ -1323,11 +1334,12 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             return;
         }
 
-        if (standalone.Diagnostics)
-        {
-            sourceText = DiagnosticsRewriter.Rewrite(sourceText, parseOptions, standalone.Method.Name);
-        }
-        standalone.Source = StandaloneRuntimeSources.RewriteGeneratedSource(sourceText, parseOptions);
+        standalone.SourceTree = StandaloneRuntimeSources.RewriteGeneratedSourceToTree(
+            sourceText,
+            parseOptions,
+            hintName: string.Empty,
+            diagnostics: standalone.Diagnostics,
+            entryPoint: standalone.Method.Name);
     }
 
     private static (string SourceText, List<string> FailedLambdas, List<LambdaRewriter.CapturedVariableInfo> CapturedVariables) GenerateParserCore(

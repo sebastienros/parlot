@@ -68,12 +68,24 @@ internal static class IncludeFilesResolver
         }
 
         var comparer = GetPathComparer();
-        var existingPaths = new HashSet<string>(
-            existingTrees
-                .Select(static tree => tree.FilePath)
-                .Where(static path => !string.IsNullOrWhiteSpace(path))
-                .Select(Path.GetFullPath),
-            comparer);
+        var existingPaths = new HashSet<string>(comparer);
+        foreach (var tree in existingTrees)
+        {
+            var path = tree.FilePath;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                existingPaths.Add(Path.GetFullPath(path));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // Ignore virtual or synthetic tree paths that cannot be mapped to filesystem paths.
+            }
+        }
         var includedPaths = new HashSet<string>(comparer);
         long totalSize = 0;
 
@@ -327,6 +339,7 @@ internal static class IncludeFilesResolver
         var matcher = new Regex(GlobToRegex(normalizedPattern), GetRegexOptions());
         var recursive = normalizedPattern.IndexOf("**", StringComparison.Ordinal) >= 0;
         var maximumDirectoryDepth = patternSegments.Length - 1;
+        var projectRootPrefixLength = EnsureEndingDirectorySeparator(projectRoot).Length;
         var directories = new Stack<(string Path, int Depth)>();
         directories.Push((searchRoot, literalSegmentCount));
         var visitedEntries = 0;
@@ -345,7 +358,7 @@ internal static class IncludeFilesResolver
                         return false;
                     }
 
-                    var relativePath = file.Substring(EnsureEndingDirectorySeparator(projectRoot).Length)
+                    var relativePath = file.Substring(projectRootPrefixLength)
                         .Replace(Path.DirectorySeparatorChar, '/')
                         .Replace(Path.AltDirectorySeparatorChar, '/');
                     if (!matcher.IsMatch(relativePath))
@@ -353,7 +366,8 @@ internal static class IncludeFilesResolver
                         continue;
                     }
 
-                    if (ContainsReparsePoint(projectRoot, file))
+                    // Ancestor directories up to projectRoot were already verified free of reparse points
+                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
                     {
                         ReportSymlink(context, diagnosticLocation, entryIndex, methodName);
                         return false;
