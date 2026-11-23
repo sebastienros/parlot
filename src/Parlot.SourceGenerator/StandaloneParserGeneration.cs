@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -110,6 +111,7 @@ public sealed partial class ParserSourceGenerator
                 ? Method.Parameters[ResultParameter.Ordinal - 1]
                 : null;
         public string? Source { get; set; }
+        public SyntaxTree? SourceTree { get; set; }
 
         // How the generated callbacks map to the grammar file
         public LineDirectives LineDirectives { get; set; } = LineDirectives.Absolute;
@@ -142,6 +144,40 @@ public sealed partial class ParserSourceGenerator
         Reason = 8,
     }
 
+    private readonly record struct CompiledFactoryWarning(
+        string MethodName,
+        string? FilePath,
+        Microsoft.CodeAnalysis.Text.TextSpan SourceSpan,
+        LinePositionSpan LineSpan);
+
+    private static readonly Lazy<(byte[] Image, (int RowOffset, string Name, Version Version)[] AssemblyRefs)> s_grammarAssemblyData = new(static () =>
+    {
+        // Compiler hosts can load analyzers from memory, leaving Assembly.Location empty.
+        using var stream = typeof(ParserSourceGenerator).Assembly.GetManifestResourceStream("Parlot.GrammarAssembly")
+            ?? throw new InvalidOperationException("The analyzer is missing its grammar compilation assembly.");
+        using var imageStream = new MemoryStream();
+        stream.CopyTo(imageStream);
+        var image = imageStream.ToArray();
+
+        var refs = new List<(int RowOffset, string Name, Version Version)>();
+        using (var pe = new PEReader(ImmutableArray.Create(image)))
+        {
+            var metadata = pe.GetMetadataReader();
+            var table = pe.PEHeaders.MetadataStartOffset + metadata.GetTableMetadataOffset(TableIndex.AssemblyRef);
+            var rowSize = metadata.GetTableRowSize(TableIndex.AssemblyRef);
+            foreach (var handle in metadata.AssemblyReferences)
+            {
+                var reference = metadata.GetAssemblyReference(handle);
+                var row = table + (MetadataTokens.GetRowNumber(handle) - 1) * rowSize;
+                refs.Add((row, metadata.GetString(reference.Name), reference.Version));
+            }
+        }
+
+        return (image, refs.ToArray());
+    });
+
+    private static readonly ConcurrentDictionary<string, MetadataReference> s_grammarAssemblyReferences = new(StringComparer.Ordinal);
+
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
     {
         var grammars = context.AdditionalTextsProvider
@@ -167,13 +203,32 @@ public sealed partial class ParserSourceGenerator
 
         var compiledFactories = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => IsCandidateMethod(node),
-            static (syntax, _) => GetMethodToGenerate(syntax)).Where(static factory => factory is not null);
+            static (syntax, _) =>
+            {
+                var factory = GetMethodToGenerate(syntax);
+                if (factory is null)
+                {
+                    return (CompiledFactoryWarning?)null;
+                }
+
+                var location = factory.Value.AttributeLocation;
+                if (location is null || !location.IsInSource)
+                {
+                    return new CompiledFactoryWarning(factory.Value.Method.Name, null, default, default);
+                }
+
+                var lineSpan = location.GetLineSpan();
+                return new CompiledFactoryWarning(factory.Value.Method.Name, lineSpan.Path, location.SourceSpan, lineSpan.Span);
+            }).Where(static factory => factory is not null);
         context.RegisterSourceOutput(compiledFactories.Combine(configuration), static (output, input) =>
         {
             if (!input.Right.DesignTime && input.Left is { } factory)
             {
+                var location = factory.FilePath is not null
+                    ? Location.Create(factory.FilePath, factory.SourceSpan, factory.LineSpan)
+                    : Location.None;
                 output.ReportDiagnostic(Diagnostic.Create(StandaloneGrammarInputDescriptor,
-                    factory.AttributeLocation, factory.Method.Name));
+                    location, factory.MethodName));
             }
         });
 
@@ -262,13 +317,7 @@ public sealed partial class ParserSourceGenerator
         compilation = compilation.AddSyntaxTrees(trees);
         if (compilation.GetTypeByMetadataName("Parlot.Fluent.Parser`1") is null)
         {
-            // Compiler hosts can load analyzers from memory, leaving Assembly.Location empty.
-            using var stream = typeof(ParserSourceGenerator).Assembly.GetManifestResourceStream("Parlot.GrammarAssembly")
-                ?? throw new InvalidOperationException("The analyzer is missing its grammar compilation assembly.");
-            using var image = new MemoryStream();
-            stream.CopyTo(image);
-            compilation = compilation.AddReferences(MetadataReference.CreateFromImage(
-                LowerReferencedVersions(image.ToArray(), compilation)));
+            compilation = compilation.AddReferences(GetGrammarAssemblyReference(compilation));
         }
 
         var entries = new List<StandaloneEntryPoint>();
@@ -358,7 +407,14 @@ public sealed partial class ParserSourceGenerator
         var owners = new Dictionary<SyntaxTree, StandaloneEntryPoint>();
         foreach (var entry in entries)
         {
-            if (entry.Source is not null)
+            if (entry.SourceTree is not null)
+            {
+                var hintName = $"StandaloneParser{generated.Count}.g.cs";
+                var tree = entry.SourceTree.WithFilePath(hintName);
+                generated.Add((hintName, tree));
+                owners.Add(tree, entry);
+            }
+            else if (entry.Source is not null)
             {
                 var hintName = $"StandaloneParser{generated.Count}.g.cs";
                 var tree = CSharpSyntaxTree.ParseText(entry.Source, options, hintName, Encoding.UTF8);
@@ -380,15 +436,31 @@ public sealed partial class ParserSourceGenerator
             var runtime = StandaloneRuntimeSources.GetSources(options, streaming: entries.Any(static entry => entry.IsReader), diagnostics: entries.Any(static entry => entry.Diagnostics));
             generated.AddRange(runtime);
             var candidate = host.AddSyntaxTrees(generated.Select(static source => source.Tree));
-            var generatedTrees = new HashSet<SyntaxTree>(generated.Select(static source => source.Tree));
-            var errors = candidate.GetDiagnostics(output.CancellationToken)
-                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
-                    && diagnostic.Location.SourceTree is { } tree && generatedTrees.Contains(tree))
-                .ToArray();
-
-            if (errors.Length > 0)
+            var errors = new List<Diagnostic>(5);
+            foreach (var source in generated)
             {
-                foreach (var error in errors.Take(5))
+                var model = candidate.GetSemanticModel(source.Tree);
+                foreach (var diagnostic in model.GetDiagnostics(cancellationToken: output.CancellationToken))
+                {
+                    if (diagnostic.Severity == DiagnosticSeverity.Error)
+                    {
+                        errors.Add(diagnostic);
+                        if (errors.Count == 5)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (errors.Count == 5)
+                {
+                    break;
+                }
+            }
+
+            if (errors.Count > 0)
+            {
+                foreach (var error in errors)
                 {
                     var owner = Owner(error.Location.SourceTree);
                     output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
@@ -399,19 +471,23 @@ public sealed partial class ParserSourceGenerator
             }
 
             // A custom emitter must not escape the source-only runtime through a fully qualified reference.
-            foreach (var source in generated)
+            // Only needed when the host actually references Parlot or Parlot.SourceGenerator, and only on generated parser trees.
+            if (host.ReferencedAssemblyNames.Any(static identity => identity.Name is "Parlot" or "Parlot.SourceGenerator"))
             {
-                var model = candidate.GetSemanticModel(source.Tree);
-                foreach (var name in source.Tree.GetRoot(output.CancellationToken).DescendantNodes().OfType<SimpleNameSyntax>())
+                foreach (var pair in owners)
                 {
-                    var symbol = model.GetSymbolInfo(name, output.CancellationToken).Symbol;
-                    if (symbol?.ContainingAssembly?.Identity.Name is "Parlot" or "Parlot.SourceGenerator")
+                    var tree = pair.Key;
+                    var model = candidate.GetSemanticModel(tree);
+                    foreach (var name in tree.GetRoot(output.CancellationToken).DescendantNodes().OfType<SimpleNameSyntax>())
                     {
-                        var owner = Owner(source.Tree);
-                        output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
-                            ExternalLocation(owner.Factory.AttributeLocation), owner.Factory.Method.Name,
-                            symbol.ToDisplayString()));
-                        return;
+                        var symbol = model.GetSymbolInfo(name, output.CancellationToken).Symbol;
+                        if (symbol?.ContainingAssembly?.Identity.Name is "Parlot" or "Parlot.SourceGenerator")
+                        {
+                            output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
+                                ExternalLocation(pair.Value.Factory.AttributeLocation), pair.Value.Factory.Method.Name,
+                                symbol.ToDisplayString()));
+                            return;
+                        }
                     }
                 }
             }
@@ -433,33 +509,47 @@ public sealed partial class ParserSourceGenerator
     /// can't be suppressed. The image is only compiled against, the compiler host's assemblies execute the factory,
     /// so its references are lowered to the versions the project references.
     /// </summary>
-    private static byte[] LowerReferencedVersions(byte[] image, Compilation compilation)
+    private static MetadataReference GetGrammarAssemblyReference(Compilation compilation)
     {
+        var (baseImage, assemblyRefs) = s_grammarAssemblyData.Value;
         var referenced = new Dictionary<string, Version>(StringComparer.OrdinalIgnoreCase);
         foreach (var identity in compilation.ReferencedAssemblyNames)
         {
             referenced[identity.Name] = identity.Version;
         }
 
-        using var pe = new PEReader(ImmutableArray.Create(image));
-        var metadata = pe.GetMetadataReader();
-        var table = pe.PEHeaders.MetadataStartOffset + metadata.GetTableMetadataOffset(TableIndex.AssemblyRef);
-        var rowSize = metadata.GetTableRowSize(TableIndex.AssemblyRef);
-        foreach (var handle in metadata.AssemblyReferences)
+        // Compute the cache key from only the AssemblyRefs that actually need lowering (empty in the common case).
+        List<(int RowOffset, string Name, Version Version)>? patches = null;
+        foreach (var (row, name, refVersion) in assemblyRefs)
         {
-            var reference = metadata.GetAssemblyReference(handle);
-            if (referenced.TryGetValue(metadata.GetString(reference.Name), out var version) && version < reference.Version)
+            if (referenced.TryGetValue(name, out var version) && version < refVersion)
             {
-                // An AssemblyRef row starts with its major, minor, build and revision numbers, as little-endian ushorts.
-                var row = table + (MetadataTokens.GetRowNumber(handle) - 1) * rowSize;
-                WriteUInt16(image, row, version.Major);
-                WriteUInt16(image, row + 2, version.Minor);
-                WriteUInt16(image, row + 4, version.Build);
-                WriteUInt16(image, row + 6, version.Revision);
+                (patches ??= new()).Add((row, name, version));
             }
         }
 
-        return image;
+        var key = patches is null
+            ? string.Empty
+            : string.Join(";", patches.Select(static p => p.Name + "=" + p.Version));
+
+        return s_grammarAssemblyReferences.GetOrAdd(key, _ =>
+        {
+            if (patches is null)
+            {
+                return MetadataReference.CreateFromImage(baseImage);
+            }
+
+            var patched = (byte[])baseImage.Clone();
+            foreach (var (row, _, version) in patches)
+            {
+                WriteUInt16(patched, row, version.Major);
+                WriteUInt16(patched, row + 2, version.Minor);
+                WriteUInt16(patched, row + 4, version.Build);
+                WriteUInt16(patched, row + 6, version.Revision);
+            }
+
+            return MetadataReference.CreateFromImage(patched);
+        });
 
         static void WriteUInt16(byte[] buffer, int offset, int value)
         {
@@ -518,7 +608,7 @@ public sealed partial class ParserSourceGenerator
         entries = ReportGrammarCompilerErrors(output, compilation, entries);
 
         var shared = new List<PreparedFactory>();
-        var rewrittenTrees = new Dictionary<SyntaxTree, (int FirstPointer, SyntaxTree Rewritten)>();
+        var rewrittenTrees = new Dictionary<SyntaxTree, (int FirstPointer, SyntaxTree Rewritten, LambdaRewriter? ParameterlessRewriter)>();
         var semanticModels = new Dictionary<SyntaxTree, SemanticModel>();
         var nextPointer = 0;
         foreach (var entry in entries)
@@ -535,21 +625,31 @@ public sealed partial class ParserSourceGenerator
                 // Pointers are unique across files, so a lambda from another file is never mistaken for one of the factory's
                 var tree = entry.Factory.Method.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
                 var firstPointer = nextPointer;
+                (SyntaxTree RewrittenTree, LambdaRewriter Rewriter)? cachedRewrite = null;
                 if (tree is not null && rewrittenTrees.TryGetValue(tree, out var known))
                 {
                     firstPointer = known.FirstPointer;
+                    if (entry.Factory.Method.Parameters.Length == 0 && known.ParameterlessRewriter is not null)
+                    {
+                        cachedRewrite = (known.Rewritten, known.ParameterlessRewriter);
+                    }
                 }
 
-                var prepared = PrepareFactory(output, compilation, entry.Factory, entry, firstPointer, semanticModels);
+                var prepared = PrepareFactory(output, compilation, entry.Factory, entry, firstPointer, semanticModels, cachedRewrite);
                 if (prepared is null)
                 {
                     continue;
                 }
 
-                if (!rewrittenTrees.ContainsKey(prepared.OriginalTree))
+                if (!rewrittenTrees.TryGetValue(prepared.OriginalTree, out var existing))
                 {
-                    rewrittenTrees.Add(prepared.OriginalTree, (firstPointer, prepared.RewrittenTree));
+                    var parameterless = entry.Factory.Method.Parameters.Length == 0 ? prepared.Rewriter : null;
+                    rewrittenTrees.Add(prepared.OriginalTree, (firstPointer, prepared.RewrittenTree, parameterless));
                     nextPointer = prepared.Rewriter.NextPointer;
+                }
+                else if (entry.Factory.Method.Parameters.Length == 0 && existing.ParameterlessRewriter is null)
+                {
+                    rewrittenTrees[prepared.OriginalTree] = (existing.FirstPointer, existing.Rewritten, prepared.Rewriter);
                 }
 
                 shared.Add(prepared);

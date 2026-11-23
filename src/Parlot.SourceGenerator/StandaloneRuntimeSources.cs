@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,71 @@ namespace Parlot.SourceGenerator;
 internal static class StandaloneRuntimeSources
 {
     private const string ResourcePrefix = "Parlot.StandaloneRuntime.";
+
+    private static readonly Lazy<string> s_licenseText = new(LoadLicenseText);
+    private static readonly ConcurrentDictionary<RuntimeSourcesKey, IReadOnlyList<(string HintName, SyntaxTree Tree)>> s_runtimeCache = new();
+
+    private readonly struct RuntimeSourcesKey : IEquatable<RuntimeSourcesKey>
+    {
+        private readonly bool _streaming;
+        private readonly bool _diagnostics;
+        private readonly LanguageVersion _languageVersion;
+        private readonly DocumentationMode _documentationMode;
+        private readonly SourceCodeKind _kind;
+        private readonly string _preprocessorSymbols;
+        private readonly string _features;
+        private readonly int _hashCode;
+
+        public RuntimeSourcesKey(CSharpParseOptions options, bool streaming, bool diagnostics)
+        {
+            _streaming = streaming;
+            _diagnostics = diagnostics;
+            _languageVersion = options.LanguageVersion;
+            _documentationMode = options.DocumentationMode;
+            _kind = options.Kind;
+            _preprocessorSymbols = options.PreprocessorSymbolNames.Any()
+                ? string.Join(";", options.PreprocessorSymbolNames.OrderBy(static s => s, StringComparer.Ordinal))
+                : string.Empty;
+            _features = options.Features.Count > 0
+                ? string.Join(";", options.Features.OrderBy(static kv => kv.Key, StringComparer.Ordinal).Select(static kv => kv.Key + "=" + kv.Value))
+                : string.Empty;
+
+            unchecked
+            {
+                var hash = 17;
+                hash = (hash * 31) + (_streaming ? 1 : 0);
+                hash = (hash * 31) + (_diagnostics ? 1 : 0);
+                hash = (hash * 31) + (int)_languageVersion;
+                hash = (hash * 31) + (int)_documentationMode;
+                hash = (hash * 31) + (int)_kind;
+                hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(_preprocessorSymbols);
+                hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(_features);
+                _hashCode = hash;
+            }
+        }
+
+        public bool Equals(RuntimeSourcesKey other) =>
+            _streaming == other._streaming
+            && _diagnostics == other._diagnostics
+            && _languageVersion == other._languageVersion
+            && _documentationMode == other._documentationMode
+            && _kind == other._kind
+            && string.Equals(_preprocessorSymbols, other._preprocessorSymbols, StringComparison.Ordinal)
+            && string.Equals(_features, other._features, StringComparison.Ordinal);
+
+        public override bool Equals(object? obj) => obj is RuntimeSourcesKey other && Equals(other);
+
+        public override int GetHashCode() => _hashCode;
+    }
+
+    private static string LoadLicenseText()
+    {
+        var assembly = typeof(StandaloneRuntimeSources).Assembly;
+        using var licenseStream = assembly.GetManifestResourceStream(ResourcePrefix + "License")
+            ?? throw new InvalidOperationException("Missing embedded runtime license.");
+        using var licenseReader = new StreamReader(licenseStream, Encoding.UTF8);
+        return licenseReader.ReadToEnd();
+    }
 
     private static readonly string[] SourceNames =
     [
@@ -58,12 +124,15 @@ internal static class StandaloneRuntimeSources
 
     internal static IReadOnlyList<(string HintName, SyntaxTree Tree)> GetSources(CSharpParseOptions options, bool streaming, bool diagnostics = false)
     {
+        var key = new RuntimeSourcesKey(options, streaming, diagnostics);
+        return s_runtimeCache.GetOrAdd(key, _ => BuildSources(options, streaming, diagnostics));
+    }
+
+    private static (string HintName, SyntaxTree Tree)[] BuildSources(CSharpParseOptions options, bool streaming, bool diagnostics)
+    {
         var assembly = typeof(StandaloneRuntimeSources).Assembly;
-        var sources = new List<(string HintName, SyntaxTree Tree)>(SourceNames.Length + 1);
+        var sources = new List<(string HintName, SyntaxTree Tree)>(SourceNames.Length + 2);
         var rewriter = new RuntimeRewriter(rewriteDeclarations: true, downlevel: !options.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER"));
-        using var licenseStream = assembly.GetManifestResourceStream(ResourcePrefix + "License")
-            ?? throw new InvalidOperationException("Missing embedded runtime license.");
-        using var licenseReader = new StreamReader(licenseStream, Encoding.UTF8);
         // PARLOT_STANDALONE compiles out the runtime-only API. PARLOT_STRING_ONLY also compiles out the compacting
         // buffer, so the cursor's buffer base is a constant, when no entry point reads a TextReader.
         var symbols = new List<string> { "PARLOT_STANDALONE" };
@@ -78,7 +147,7 @@ internal static class StandaloneRuntimeSources
             symbols.Add("PARLOT_NO_GENERIC_MATH");
         }
 
-        var header = "// <auto-generated/>\n/*\n" + licenseReader.ReadToEnd() + "\n*/\n"
+        var header = "// <auto-generated/>\n/*\n" + s_licenseText.Value + "\n*/\n"
             + string.Concat(symbols.Select(static symbol => "#define " + symbol + "\n")) + "#nullable enable\n";
 
         // Parse the doc comments whatever the consumer's mode is, so that the rewriter can strip them
@@ -101,13 +170,26 @@ internal static class StandaloneRuntimeSources
             sources.Add((hintName, CSharpSyntaxTree.ParseText(text, options, hintName, Encoding.UTF8)));
         }
 
-        return sources;
+        return sources.ToArray();
     }
 
     internal static string RewriteGeneratedSource(string source, CSharpParseOptions options)
     {
         var tree = CSharpSyntaxTree.ParseText(source, options);
         return new RuntimeRewriter(rewriteDeclarations: false, downlevel: false).Visit(tree.GetRoot()).ToFullString();
+    }
+
+    internal static SyntaxTree RewriteGeneratedSourceToTree(string source, CSharpParseOptions options, string hintName, bool diagnostics = false, string? entryPoint = null)
+    {
+        var tree = CSharpSyntaxTree.ParseText(source, options, hintName, Encoding.UTF8);
+        SyntaxNode root = tree.GetRoot();
+        if (diagnostics && entryPoint is not null)
+        {
+            root = DiagnosticsRewriter.RewriteRoot(root, entryPoint);
+        }
+
+        root = new RuntimeRewriter(rewriteDeclarations: false, downlevel: false).Visit(root)!;
+        return CSharpSyntaxTree.Create((CSharpSyntaxNode)root, options, hintName, Encoding.UTF8);
     }
 
     private sealed class RuntimeRewriter : CSharpSyntaxRewriter

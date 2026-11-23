@@ -16,7 +16,10 @@ internal sealed class DiagnosticsRewriter : CSharpSyntaxRewriter
     private DiagnosticsRewriter(string entry) { _entry = entry; }
 
     internal static string Rewrite(string source, CSharpParseOptions options, string entry)
-        => new DiagnosticsRewriter(entry).Visit(CSharpSyntaxTree.ParseText(source, options).GetRoot()).ToFullString();
+        => RewriteRoot(CSharpSyntaxTree.ParseText(source, options).GetRoot(), entry).ToFullString();
+
+    internal static SyntaxNode RewriteRoot(SyntaxNode root, string entry)
+        => new DiagnosticsRewriter(entry).Visit(root)!;
 
     public override SyntaxNode? VisitMethodDeclaration(MethodDeclarationSyntax node)
     {

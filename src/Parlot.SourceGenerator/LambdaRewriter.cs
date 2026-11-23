@@ -167,7 +167,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         var pointer = _nextPointer++;
         var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
             .Visit(originalLambda).ToFullString().Trim();
-        var capturedVariables = DetectCapturedVariables(originalLambda, originalSource);
+        var capturedInside = _semanticModel.AnalyzeDataFlow(originalLambda)?.CapturedInside ?? default;
+        var capturedVariables = DetectCapturedVariables(originalLambda, originalSource, capturedInside);
 
         // Determine return type and parameter types from semantic model
         var paramTypes = new List<string>();
@@ -211,9 +212,9 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         BlockSyntax newBody;
         if (delegateInvokeMethod is not null)
         {
-            var hasCaptures = _semanticModel.AnalyzeDataFlow(originalLambda)?.CapturedInside.Any(symbol =>
-                !symbol.Locations.Any(location =>
-                    location.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(location.SourceSpan))) == true;
+            var hasCaptures = !capturedInside.IsDefaultOrEmpty && capturedInside.Any(symbol =>
+                !symbol.Locations.Any(loc =>
+                    loc.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(loc.SourceSpan)));
             var executionBody = blockBody is not null
                 ? (BlockSyntax)Visit(blockBody)
                 : SyntaxFactory.Block(ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, delegateInvokeMethod.ReturnsVoid));
@@ -344,10 +345,15 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     /// </summary>
     private List<CapturedVariableInfo> DetectCapturedVariables(
         LambdaExpressionSyntax lambda,
-        string lambdaSource)
+        string lambdaSource,
+        System.Collections.Immutable.ImmutableArray<ISymbol> capturedSymbols)
     {
         var captures = new List<CapturedVariableInfo>();
-        var capturedSymbols = _semanticModel.AnalyzeDataFlow(lambda)?.CapturedInside;
+        if (capturedSymbols.IsDefaultOrEmpty)
+        {
+            return captures;
+        }
+
         foreach (var identifier in lambda.Body.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
         {
             var name = identifier.Identifier.Text;
@@ -355,7 +361,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             var symbolInfo = _semanticModel.GetSymbolInfo(identifier);
             var symbol = symbolInfo.Symbol;
 
-            if (symbol is null || capturedSymbols?.Contains(symbol, SymbolEqualityComparer.Default) != true)
+            if (symbol is null || !capturedSymbols.Contains(symbol, SymbolEqualityComparer.Default))
             {
                 continue;
             }
@@ -474,7 +480,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            if (_semanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol parameter
+            if (_factory.Parameters.Length > 0
+                && _semanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol parameter
                 && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, _factory))
             {
                 return SyntaxFactory.MemberAccessExpression(
@@ -506,17 +513,19 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             if (node.Parent is MemberAccessExpressionSyntax member && member.Name == node
                 || node.Parent is MemberBindingExpressionSyntax or AliasQualifiedNameSyntax
                 || node.Parent is QualifiedNameSyntax qualified && qualified.Right == node
-                || node.Parent is NameColonSyntax or NameEqualsSyntax)
+                || node.Parent is NameColonSyntax or NameEqualsSyntax
+                || node.IsVar
+                || node is GenericNameSyntax { IsUnboundGenericName: true })
             {
                 return null;
             }
 
-            if (QualifyName(node) is { } name)
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            if (QualifyNameSymbol(node, symbol) is { } name)
             {
                 return name;
             }
 
-            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
             if (symbol is IMethodSymbol { IsStatic: true, MethodKind: MethodKind.Ordinary }
                 or IFieldSymbol { IsStatic: true }
                 or IPropertySymbol { IsStatic: true }
@@ -542,7 +551,11 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 return null;
             }
 
-            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            return QualifyNameSymbol(node, _semanticModel.GetSymbolInfo(node).Symbol);
+        }
+
+        private static NameSyntax? QualifyNameSymbol(NameSyntax node, ISymbol? symbol)
+        {
             // Nullable<T> and native integers display with their keyword syntax, which isn't a name
             return symbol is INamedTypeSymbol { IsAnonymousType: false, IsNativeIntegerType: false, TypeKind: not TypeKind.Error }
                     and not { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
