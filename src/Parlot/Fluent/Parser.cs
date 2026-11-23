@@ -5,7 +5,14 @@ using System.Linq;
 
 namespace Parlot.Fluent;
 
-public abstract partial class Parser<T> : IParser<T>
+internal interface IWithoutValueParser
+{
+    bool CanParseWithoutValue { get; }
+
+    bool ParseWithoutValue(ParseContext context, out int start, out int end);
+}
+
+public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser
 {
     public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
 
@@ -36,6 +43,17 @@ public abstract partial class Parser<T> : IParser<T>
     /// It can't change once the parser is built, a <see cref="Deferred{T}"/> parser is always set.
     /// </remarks>
     internal virtual bool CanParseWithoutValue => false;
+
+    bool IWithoutValueParser.CanParseWithoutValue => CanParseWithoutValue;
+
+    bool IWithoutValueParser.ParseWithoutValue(ParseContext context, out int start, out int end)
+    {
+        var result = new ParseResult<T>();
+        var success = CanParseWithoutValue ? ParseWithoutValue(context, ref result) : Parse(context, ref result);
+        start = result.Start;
+        end = result.End;
+        return success;
+    }
 
     /// <summary>
     /// Attempts to parse the input and returns whether the parse was successful.
@@ -72,17 +90,26 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
 
     /// <summary>
-    /// Builds a parser that discards the previous result and returns the default value of type U.
-    /// For types that implement IConvertible, attempts type conversion.
+    /// Builds a parser that discards the previous result and returns the default value of type <typeparamref name="U"/>.
+    /// For types that implement <see cref="IConvertible"/>, attempts runtime type conversion via <see cref="Convert.ChangeType(object?, Type, IFormatProvider?)"/>.
     /// </summary>
+    /// <remarks>
+    /// When <typeparamref name="U"/> implements <see cref="IConvertible"/> and the parsed value also implements
+    /// <see cref="IConvertible"/>, conversion uses <see cref="CultureInfo.CurrentCulture"/> and may box value types.
+    /// Prefer an explicit <see cref="Then{U}(Func{T, U})"/> conversion or <see cref="Then{U}(U)"/> constant on hot paths
+    /// or when culture-invariant conversion is required.
+    /// </remarks>
     public Parser<U?> Then<U>()
     {
-        // Check if U implements IConvertible at construction time for performance
+        // Check at construction time whether runtime IConvertible conversion is possible
         var targetImplementsIConvertible = typeof(IConvertible).IsAssignableFrom(typeof(U));
+        var sourceCanImplementIConvertible =
+            typeof(IConvertible).IsAssignableFrom(typeof(T))
+            || (!typeof(T).IsValueType && !typeof(T).IsSealed);
 
-        if (targetImplementsIConvertible)
+        if (targetImplementsIConvertible && sourceCanImplementIConvertible)
         {
-            return new Then<T, U?>(this, x =>
+            return new Then<T, U?>(this, static x =>
             {
                 // If both T and U are IConvertible, try to convert
                 if (x is IConvertible)
@@ -104,7 +131,7 @@ public abstract partial class Parser<T> : IParser<T>
         }
         else
         {
-            // For types that don't implement IConvertible, just return default
+            // For types that cannot implement IConvertible, just return default
             return new Then<T, U?>(this, default(U));
         }
     }

@@ -38,6 +38,9 @@ public static partial class ParserExtensions
     /// <param name="commentsBuilder">The action to configure the comments builder.</param>
     /// <returns>A parser that uses white spaces, new lines and comments.</returns>
     /// <remarks>
+    /// Calling <see cref="WithComments{T}(Parser{T}, Action{CommentsBuilder})"/> replaces the active whitespace parser with
+    /// the builder's result. Call <see cref="CommentsBuilder.WithWhiteSpace()"/> or <see cref="CommentsBuilder.WithWhiteSpaceOrNewLine"/>
+    /// inside <paramref name="commentsBuilder"/> if whitespace should continue to be skipped alongside comments.
     /// Here is an example of usage:
     /// <code>
     /// var parserWithComments = myParser.WithComments(comments =>

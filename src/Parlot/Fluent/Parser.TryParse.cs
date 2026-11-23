@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -54,23 +55,34 @@ public abstract partial class Parser<T> : IParserText
         return TryParse(new ParseContext(new Scanner(text), cancellationToken), out value!, out _, withReason: false);
     }
 
-    public bool TryParse(string text, out T value, out ParseError? error)
+    /// <summary>
+    /// Tries to parse at the cursor of <paramref name="context"/> without constructing a <see cref="ParseError"/>.
+    /// </summary>
+    /// <param name="context">The context to parse with.</param>
+    /// <param name="value">The parsed value when parsing succeeds; otherwise <see langword="default"/>.</param>
+    /// <returns><see langword="true"/> when parsing succeeds; otherwise <see langword="false"/>.</returns>
+    public bool TryParse(ParseContext context, out T? value)
+    {
+        return TryParse(context, out value!, out _, withReason: false);
+    }
+
+    public bool TryParse(string text, [MaybeNullWhen(false)] out T value, out ParseError? error)
     {
         return TryParse(new ParseContext(new Scanner(text)), out value, out error);
     }
 
-    public bool TryParse(string text, CancellationToken cancellationToken, out T value, out ParseError? error)
+    public bool TryParse(string text, CancellationToken cancellationToken, [MaybeNullWhen(false)] out T value, out ParseError? error)
     {
         return TryParse(new ParseContext(new Scanner(text), cancellationToken), out value, out error);
     }
 
-    public bool TryParse(ParseContext context, out T value, out ParseError? error)
+    public bool TryParse(ParseContext context, [MaybeNullWhen(false)] out T value, out ParseError? error)
     {
         return TryParse(context, out value, out error, withReason: true);
     }
 
     // withReason: whether a failure with a reason returns its error, which computes its position
-    private bool TryParse(ParseContext context, out T value, out ParseError? error, bool withReason)
+    private bool TryParse(ParseContext context, [MaybeNullWhen(false)] out T value, out ParseError? error, bool withReason)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 

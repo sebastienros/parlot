@@ -159,5 +159,5 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnaly
         return result;
     }
 
-    public override string ToString() => "(Select)";
+    public override string ToString() => FormatOnce($"Select({new ParserList(", ", _parsers)})");
 }

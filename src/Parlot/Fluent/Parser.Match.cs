@@ -106,6 +106,19 @@ public abstract partial class Parser<T>
 
     /// <summary>
     /// Matches at the cursor of <paramref name="context"/> and returns the text the parser matched, without building its
+    /// value or constructing a <see cref="ParseError"/>.
+    /// </summary>
+    /// <param name="context">The context to match with, whose cursor is moved after the match.</param>
+    /// <param name="match">The text the parser matched.</param>
+    /// <returns>Whether the parser matched.</returns>
+    /// <remarks>See <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/>.</remarks>
+    public bool TryMatch(ParseContext context, out TextSpan match)
+    {
+        return TryMatch(context, out match, out _, withReason: false);
+    }
+
+    /// <summary>
+    /// Matches at the cursor of <paramref name="context"/> and returns the text the parser matched, without building its
     /// value.
     /// </summary>
     /// <param name="context">The context to match with, whose cursor is moved after the match.</param>

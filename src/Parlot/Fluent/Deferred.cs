@@ -309,6 +309,17 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
         return result;
     }
 
+    /// <summary>
+    /// Names this deferred parser and returns it as a <see cref="Deferred{T}"/> so <see cref="Parser"/> can still be assigned fluently.
+    /// </summary>
+    /// <param name="name">The parser name.</param>
+    /// <returns>This <see cref="Deferred{T}"/> instance.</returns>
+    public new Deferred<T> Named(string name)
+    {
+        Name = name;
+        return this;
+    }
+
     // A Deferred reached again, in its own text or through another path, is written as a reference
     public override string ToString() => Name is null
         ? FormatOnce($"{Parser} (Deferred)")

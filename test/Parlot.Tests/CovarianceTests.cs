@@ -117,4 +117,21 @@ public class CovarianceTests
         Assert.True(success);
         Assert.Equal("world", value);
     }
+
+    [Fact]
+    public void CovariantOneOfShouldPreserveSeekabilityAndSkipAllocationsWhenCaptured()
+    {
+        var dogParser = Terms.Text("dog").Then(static _ => new Dog { Name = "Buddy", Breed = "Golden Retriever" });
+        var catParser = Terms.Text("cat").Then(static _ => new Cat { Name = "Whiskers", Color = "Orange" });
+        var listDogParser = OneOrMany(Terms.Char('d')).Then(static _ => new Dog { Name = "Pack", Breed = "Wolf" });
+
+        var animalParser = OneOf<Animal>(dogParser, catParser);
+        var seekable = (Parlot.Rewriting.ISeekable)animalParser;
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+
+        var captured = Capture(OneOf<Animal>(listDogParser, catParser));
+        Assert.Equal("ddd", captured.Parse("ddd").ToString());
+        Assert.Equal("cat", captured.Parse("cat").ToString());
+    }
 }

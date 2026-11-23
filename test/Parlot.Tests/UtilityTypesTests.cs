@@ -1,4 +1,6 @@
+using Parlot.Fluent;
 using Xunit;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests;
 
@@ -245,5 +247,104 @@ public class UtilityTypesTests
         var readOnlySpan = span.Span;
 
         Assert.Equal(0, readOnlySpan.Length);
+    }
+
+    [Fact]
+    public void OptionEqualityAndHelpersShouldWork()
+    {
+        var none = Option<string>.None;
+        var someNull = new Option<string>(null);
+        var someA = new Option<string>("a");
+        var someA2 = new Option<string>("a");
+        var someB = new Option<string>("b");
+
+        Assert.False(none.HasValue);
+        Assert.Null(none.OrDefault());
+        Assert.Equal("a", someA.OrDefault());
+        Assert.Equal(default, Option<int>.None.OrDefault());
+        Assert.Equal(42, new Option<int>(42).OrDefault());
+
+        Assert.True(none == default);
+        Assert.True(none != someNull);
+        Assert.True(someA == someA2);
+        Assert.True(someA != someB);
+        Assert.True(someA.Equals((object)someA2));
+        Assert.False(someA.Equals("a"));
+        Assert.Equal(someA.GetHashCode(), someA2.GetHashCode());
+        Assert.NotEqual(none.GetHashCode(), someNull.GetHashCode());
+        Assert.Equal("a", someA.ToString());
+        Assert.Equal(string.Empty, none.ToString());
+    }
+
+    [Fact]
+    public void TextPositionEqualityShouldWork()
+    {
+        var p1 = new TextPosition(10, 2, 5);
+        var p2 = new TextPosition(10, 2, 5);
+        var p3 = new TextPosition(11, 2, 6);
+
+        Assert.True(p1 == p2);
+        Assert.False(p1 != p2);
+        Assert.True(p1 != p3);
+        Assert.True(p1.Equals(p2));
+        Assert.True(p1.Equals((object)p2));
+        Assert.False(p1.Equals("not a position"));
+        Assert.Equal(p1.GetHashCode(), p2.GetHashCode());
+    }
+
+    [Fact]
+    public void FluentFactoryAndContextOverloadErgonomicsShouldWork()
+    {
+        // Cached builder singletons
+        Assert.Same(Literals, Literals);
+        Assert.Same(Terms, Terms);
+
+        // Parsers.Optional static factory
+        var opt = Optional(Terms.Integer());
+        Assert.Equal(new Option<long>(42), opt.Parse(" 42"));
+        Assert.Equal(Option<long>.None, opt.Parse("abc"));
+
+        // Custom-quote String overloads on Literals and Terms
+        Assert.Equal("a%b", Literals.String('%').Parse("%a\\%b%").ToString());
+        Assert.Equal("a\\%b", Literals.String('%', returnDecoded: false).Parse("%a\\%b%").ToString());
+        Assert.Equal("hello", Terms.String('`').Parse("  `hello`").ToString());
+
+        // Deferred<T>.Named returns Deferred<T>
+        var expr = Deferred<long>().Named("expr");
+        expr.Parser = Terms.Integer();
+        Assert.Equal("expr", expr.Name);
+        Assert.Equal(7, expr.Parse(" 7"));
+
+        // Select.ToString includes branch descriptions
+        var selected = Select(static () => 0, Literals.Char('a'), Literals.Char('b'));
+        Assert.Contains("Char('a')", selected.ToString());
+        Assert.Contains("Char('b')", selected.ToString());
+
+        // TryParse(ParseContext, out T?) and TryMatch(ParseContext, out TextSpan)
+        var parser = Terms.Text("hello").When(static (_, _) => false, "rejected");
+        var ctxFail = new ParseContext(new Scanner("hello"));
+        Assert.False(parser.TryParse(ctxFail, out var failedValue));
+        Assert.Null(failedValue);
+        Assert.Equal(0, ctxFail.Scanner.Cursor.Offset);
+
+        var ctxMatchFail = new ParseContext(new Scanner("hello"));
+        Assert.False(parser.TryMatch(ctxMatchFail, out var failedMatch));
+        Assert.Equal(0, failedMatch.Length);
+        Assert.Equal(0, ctxMatchFail.Scanner.Cursor.Offset);
+
+        var okParser = Terms.Text("hello");
+        var ctxOk = new ParseContext(new Scanner("  hello!"));
+        Assert.True(okParser.TryParse(ctxOk, out var parsedValue));
+        Assert.Equal("hello", parsedValue);
+        Assert.Equal(7, ctxOk.Scanner.Cursor.Offset);
+
+        var ctxMatchOk = new ParseContext(new Scanner("  hello!"));
+        Assert.True(okParser.TryMatch(ctxMatchOk, out var matchedSpan));
+        Assert.Equal("  hello", matchedSpan.ToString());
+        Assert.Equal(7, ctxMatchOk.Scanner.Cursor.Offset);
+
+        // Then<U>() on non-IConvertible sealed/struct type returns constant default
+        var spanToInt = Literals.Identifier().Then<int>();
+        Assert.Equal(0, spanToInt.Parse("abc"));
     }
 }
