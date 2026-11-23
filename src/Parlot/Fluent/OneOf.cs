@@ -1205,7 +1205,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         {
             if (parser is not ISourceable sourceable)
             {
-                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
+                throw new NotSupportedException($"OneOf requires all parsers to be source-generatable, but {SourceGenerationContext.DescribeParser(parser)} does not implement ISourceable.");
             }
 
             var (methodName, _, _, _) = context.Helpers.GetOrCreate(
@@ -1469,8 +1469,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     {
         EnsureResolved();
 
-        // The alternatives are tried in order. A choice of 8 texts or keywords or more is generated as a lookup instead.
-        if (Parsers.Count == 0 || CountAlternatives(this) >= 8)
+        // The alternatives are tried in order. A choice of 8 texts or keywords or more is generated as a lookup instead,
+        // and one with prefix dispatch dispatches on its prefixes instead.
+        if (Parsers.Count == 0 || _prefixMap != null || CountAlternatives(this) >= 8)
         {
             return -1;
         }

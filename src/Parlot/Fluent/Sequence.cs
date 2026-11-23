@@ -101,7 +101,8 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
 
         if (_parser1 is not ISourceable parser1 || _parser2 is not ISourceable parser2)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser1 is not ISourceable ? (object)_parser1 : _parser2;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2>), context) is { } spanResult)
@@ -296,7 +297,8 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
 
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser is not ISourceable ? (object)_parser : _lastParser;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3>), context) is { } spanResult)
@@ -456,7 +458,8 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
 
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser is not ISourceable ? (object)_parser : _lastParser;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4>), context) is { } spanResult)
@@ -628,7 +631,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
 
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser is not ISourceable ? (object)_parser : _lastParser;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5>), context) is { } spanResult)
@@ -801,7 +805,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
 
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser is not ISourceable ? (object)_parser : _lastParser;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), context) is { } spanResult)
@@ -975,7 +980,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            var unsupported = _parser is not ISourceable ? (object)_parser : _lastParser;
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(unsupported)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), context) is { } spanResult)

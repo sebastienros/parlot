@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Linq;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -157,6 +159,14 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         isEnabledByDefault: true,
         description: "The Parlot build-transitive props expose MSBuildProjectDirectory to enforce project-root containment.");
 
+    private static readonly DiagnosticDescriptor TypeNotFoundDescriptor = new(
+        "PARLOT002",
+        "Type not found in emitted assembly",
+        "Could not find type '{0}' in emitted assembly",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private static readonly DiagnosticDescriptor MethodNotFoundDescriptor = new(
         "PARLOT011",
         "Method not found in emitted assembly",
@@ -304,110 +314,38 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             validationArgs.Add(new object?[] { methodSymbol.Name });
         }
 
-        // Check for [IncludeFiles] attribute on method and containing class
+        // Check for [IncludeFiles] attributes across all partial declarations of the containing class and the method
         var includeFilesAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeFilesAttribute");
         var additionalFiles = new List<string>();
         if (includeFilesAttrSymbol is not null)
         {
-            // Check class-level attribute first
-            var classIncludeFilesAttr = containingType.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeFilesAttrSymbol));
-            if (classIncludeFilesAttr is not null && classIncludeFilesAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = classIncludeFilesAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalFiles.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
-
-            // Then check method-level attribute (which can add more files)
-            var methodIncludeFilesAttr = methodSymbol.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeFilesAttrSymbol));
-            if (methodIncludeFilesAttr is not null && methodIncludeFilesAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = methodIncludeFilesAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalFiles.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
+            var seenFiles = new HashSet<string>(StringComparer.Ordinal);
+            CollectStringArrayAttributeValues(containingType, includeFilesAttrSymbol, additionalFiles, seenFiles);
+            CollectStringArrayAttributeValues(methodSymbol, includeFilesAttrSymbol, additionalFiles, seenFiles);
         }
 
-        // Check for [IncludeUsings] attribute on method and containing class
+        // Check for [IncludeUsings] attributes across all partial declarations of the containing class and the method
         var includeUsingsAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeUsingsAttribute");
         var additionalUsings = new List<string>();
         if (includeUsingsAttrSymbol is not null)
         {
-            // Check class-level attribute first
-            var classIncludeUsingsAttr = containingType.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeUsingsAttrSymbol));
-            if (classIncludeUsingsAttr is not null && classIncludeUsingsAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = classIncludeUsingsAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalUsings.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
-
-            // Then check method-level attribute (which can add more usings)
-            var methodIncludeUsingsAttr = methodSymbol.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeUsingsAttrSymbol));
-            if (methodIncludeUsingsAttr is not null && methodIncludeUsingsAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = methodIncludeUsingsAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalUsings.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
+            var seenUsings = new HashSet<string>(StringComparer.Ordinal);
+            CollectStringArrayAttributeValues(containingType, includeUsingsAttrSymbol, additionalUsings, seenUsings);
+            CollectStringArrayAttributeValues(methodSymbol, includeUsingsAttrSymbol, additionalUsings, seenUsings);
         }
 
         // Callbacks name types and namespaces fully qualified, but their extension methods (and query or collection
         // expression methods) bind through the usings of the factory, file-level and in its namespaces
         AddUsingsInScope(methodDecl, semanticModel, additionalUsings);
 
-        // Check for [IncludeGenerators] attribute on method and containing class
+        // Check for [IncludeGenerators] attributes across all partial declarations of the containing class and the method
         var includeGeneratorsAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeGeneratorsAttribute");
         var additionalGenerators = new List<string>();
         if (includeGeneratorsAttrSymbol is not null)
         {
-            // Check class-level attribute first
-            var classIncludeGeneratorsAttr = containingType.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeGeneratorsAttrSymbol));
-            if (classIncludeGeneratorsAttr is not null && classIncludeGeneratorsAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = classIncludeGeneratorsAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalGenerators.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
-
-            // Then check method-level attribute (which can add more generators)
-            var methodIncludeGeneratorsAttr = methodSymbol.GetAttributes()
-                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeGeneratorsAttrSymbol));
-            if (methodIncludeGeneratorsAttr is not null && methodIncludeGeneratorsAttr.ConstructorArguments.Length > 0)
-            {
-                var arg = methodIncludeGeneratorsAttr.ConstructorArguments[0];
-                if (arg.Kind == TypedConstantKind.Array)
-                {
-                    additionalGenerators.AddRange(arg.Values
-                        .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!));
-                }
-            }
+            var seenGenerators = new HashSet<string>(StringComparer.Ordinal);
+            CollectStringArrayAttributeValues(containingType, includeGeneratorsAttrSymbol, additionalGenerators, seenGenerators);
+            CollectStringArrayAttributeValues(methodSymbol, includeGeneratorsAttrSymbol, additionalGenerators, seenGenerators);
         }
 
         return new MethodToGenerate(
@@ -418,6 +356,36 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             additionalGenerators.ToArray(),
             validationErrors.Count > 0 ? validationErrors.ToArray() : null,
             validationErrors.Count > 0 ? validationArgs.ToArray() : null);
+    }
+
+    private static void CollectStringArrayAttributeValues(
+        ISymbol symbol,
+        INamedTypeSymbol attributeSymbol,
+        List<string> target,
+        HashSet<string> seen)
+    {
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attributeSymbol)
+                || attr.ConstructorArguments.Length == 0)
+            {
+                continue;
+            }
+
+            var arg = attr.ConstructorArguments[0];
+            if (arg.Kind != TypedConstantKind.Array || arg.IsNull)
+            {
+                continue;
+            }
+
+            foreach (var value in arg.Values)
+            {
+                if (value.Value is string text && seen.Add(text))
+                {
+                    target.Add(text);
+                }
+            }
+        }
     }
 
     private static void AddUsingsInScope(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, List<string> usings)
@@ -757,10 +725,6 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // This allows us to load assemblies that the project references
         var assemblyPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var pendingCompilationRefs = new List<(string Name, RoslynCompilation Compilation)>();
-        var loadedAssemblies = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
-
-        // Debug: collect reference info
-        var refDebugInfo = new List<string>();
 
         // First pass: collect all references
         foreach (var reference in hostCompilation.References)
@@ -820,80 +784,37 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 {
                     assemblyPaths[assemblyName] = filePath;
                 }
-                refDebugInfo.Add($"PE: {assemblyName} -> {filePath}");
             }
             else if (reference is CompilationReference compRef)
             {
                 // For project references, we need to emit the referenced compilation to get an assembly
                 var refCompilation = compRef.Compilation;
                 var refAssemblyName = refCompilation.AssemblyName;
-                refDebugInfo.Add($"Compilation: {refAssemblyName}");
-                if (refAssemblyName is not null && refAssemblyName != "Parlot")
+                if (refAssemblyName is not null && !string.Equals(refAssemblyName, "Parlot", StringComparison.OrdinalIgnoreCase))
                 {
                     pendingCompilationRefs.Add((refAssemblyName, refCompilation));
                 }
             }
-            else
-            {
-                refDebugInfo.Add($"Unknown: {reference.GetType().Name}");
-            }
         }
 
-        // Debug info removed - assembly loading working correctly
+        // Load into a collectible AssemblyLoadContext on .NET Core / .NET 5+ so emitted grammar assemblies
+        // can be unloaded after generation instead of leaking into the compiler server process.
+        // On .NET Framework hosts, fall back to a synchronized AppDomain.AssemblyResolve handler.
+        using var loader = new FactoryAssemblyLoader(assemblyPaths);
 
-        // Set up an assembly resolver - needs to be set up BEFORE loading CompilationReference assemblies
-        // because those assemblies may have their own dependencies
-        ResolveEventHandler? resolver = null;
-        resolver = (sender, args) =>
-        {
-            var requestedName = new AssemblyName(args.Name);
-            if (requestedName.Name == "Parlot")
-            {
-                // Return the Parlot assembly that this generator is already using
-                // This ensures ISourceable and other types have the same identity
-                return typeof(Fluent.Parser<>).Assembly;
-            }
-
-            // Try to return pre-loaded assembly from project references (CompilationReference)
-            if (requestedName.Name is not null && loadedAssemblies.TryGetValue(requestedName.Name, out var loadedAssembly))
-            {
-                return loadedAssembly;
-            }
-
-            // Try to load from file-based references (PortableExecutableReference)
-            if (requestedName.Name is not null && assemblyPaths.TryGetValue(requestedName.Name, out var path))
-            {
-                try
-                {
-                    var asm = Assembly.Load(File.ReadAllBytes(path));
-                    loadedAssemblies[requestedName.Name] = asm;
-                    return asm;
-                }
-                catch
-                {
-                    // Fall through to return null
-                }
-            }
-
-            return null;
-        };
-
-        AppDomain.CurrentDomain.AssemblyResolve += resolver;
-
-        // Now load CompilationReference assemblies (with resolver active)
+        // Load CompilationReference assemblies with the resolver active
         foreach (var (refAssemblyName, refCompilation) in pendingCompilationRefs)
         {
-            if (!loadedAssemblies.ContainsKey(refAssemblyName))
+            if (!loader.IsLoaded(refAssemblyName))
             {
                 using var refPeStream = new MemoryStream();
                 var refEmitResult = refCompilation.Emit(refPeStream);
                 if (refEmitResult.Success)
                 {
-                    refPeStream.Position = 0;
                     try
                     {
-                        var refAssembly = Assembly.Load(refPeStream.ToArray());
-                        loadedAssemblies[refAssemblyName] = refAssembly;
+                        var refAssembly = loader.LoadFromStream(refPeStream);
+                        loader.RegisterLoaded(refAssemblyName, refAssembly);
                     }
                     catch (Exception ex)
                     {
@@ -912,24 +833,209 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             }
         }
 
-        try
+        LoadAndExecuteFactories(context, loader, peStream, factories, targetFramework);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
+    private static void LoadAndExecuteFactories(
+        SourceProductionContext context,
+        FactoryAssemblyLoader loader,
+        MemoryStream peStream,
+        IReadOnlyList<PreparedFactory> factories,
+        TargetFrameworkInfo targetFramework)
+    {
+        var assembly = loader.LoadFromStream(peStream);
+        foreach (var factory in factories)
         {
-            var assembly = Assembly.Load(peStream.ToArray());
-            foreach (var factory in factories)
+            try
+            {
+                ExecuteFactory(context, assembly, factory, targetFramework);
+            }
+            catch (Exception exception) when (IsStandaloneOutputException(exception))
+            {
+                ReportStandaloneOutputException(context, factory.Standalone, exception);
+            }
+            finally
+            {
+                ParserSites.Reset();
+                LambdaPointer.Reset();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads emitted factory assemblies and their project references into a collectible
+    /// <c>System.Runtime.Loader.AssemblyLoadContext</c> when running on .NET Core/.NET 5+ (detected
+    /// via reflection because the generator targets netstandard2.0), or falls back to a synchronized
+    /// <see cref="AppDomain.AssemblyResolve"/> handler on .NET Framework.
+    /// </summary>
+    [SuppressMessage("Build", "RS1035", Justification = "The generator must load emitted grammar assemblies to execute parser factories.")]
+    private sealed class FactoryAssemblyLoader : IDisposable
+    {
+        private static readonly Type? AssemblyLoadContextType =
+            Type.GetType("System.Runtime.Loader.AssemblyLoadContext, System.Runtime.Loader")
+            ?? Type.GetType("System.Runtime.Loader.AssemblyLoadContext");
+
+        private static readonly ConstructorInfo? AlcConstructor =
+            AssemblyLoadContextType?.GetConstructor(new[] { typeof(string), typeof(bool) });
+
+        private static readonly MethodInfo? AlcLoadFromStreamMethod =
+            AssemblyLoadContextType?.GetMethod("LoadFromStream", new[] { typeof(Stream) });
+
+        private static readonly EventInfo? AlcResolvingEvent =
+            AssemblyLoadContextType?.GetEvent("Resolving");
+
+        private static readonly MethodInfo? AlcUnloadMethod =
+            AssemblyLoadContextType?.GetMethod("Unload", Type.EmptyTypes);
+
+        private static readonly MethodInfo ResolveForAlcMethod =
+            typeof(FactoryAssemblyLoader).GetMethod(nameof(ResolveForAlc), BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        private readonly Dictionary<string, string> _assemblyPaths;
+        private readonly Dictionary<string, Assembly> _loadedAssemblies = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _sync = new();
+        private readonly object? _alc;
+        private readonly Delegate? _alcResolvingHandler;
+        private readonly ResolveEventHandler? _appDomainResolver;
+
+        public FactoryAssemblyLoader(Dictionary<string, string> assemblyPaths)
+        {
+            _assemblyPaths = assemblyPaths;
+
+            if (AlcConstructor is not null
+                && AlcLoadFromStreamMethod is not null
+                && AlcResolvingEvent is not null
+                && AlcUnloadMethod is not null)
+            {
+                _alc = AlcConstructor.Invoke(new object[] { "Parlot.SourceGenerator", true });
+                _alcResolvingHandler = Delegate.CreateDelegate(AlcResolvingEvent.EventHandlerType!, this, ResolveForAlcMethod);
+                AlcResolvingEvent.AddEventHandler(_alc, _alcResolvingHandler);
+            }
+            else
+            {
+                _appDomainResolver = ResolveForAppDomain;
+                AppDomain.CurrentDomain.AssemblyResolve += _appDomainResolver;
+            }
+        }
+
+        public Assembly LoadFromStream(MemoryStream peStream)
+        {
+            peStream.Position = 0;
+
+            if (_alc is not null)
             {
                 try
                 {
-                    ExecuteFactory(context, assembly, factory, targetFramework);
+                    return (Assembly)AlcLoadFromStreamMethod!.Invoke(_alc, new object[] { peStream })!;
                 }
-                catch (Exception exception) when (IsStandaloneOutputException(exception))
+                catch (TargetInvocationException ex) when (ex.InnerException is not null)
                 {
-                    ReportStandaloneOutputException(context, factory.Standalone, exception);
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                    throw;
                 }
             }
+
+            return Assembly.Load(peStream.ToArray());
         }
-        finally
+
+        public bool IsLoaded(string assemblyName)
         {
-            AppDomain.CurrentDomain.AssemblyResolve -= resolver;
+            lock (_sync)
+            {
+                return _loadedAssemblies.ContainsKey(assemblyName);
+            }
+        }
+
+        public void RegisterLoaded(string assemblyName, Assembly assembly)
+        {
+            lock (_sync)
+            {
+                _loadedAssemblies[assemblyName] = assembly;
+            }
+        }
+
+        private Assembly? ResolveForAlc(object alc, AssemblyName requestedName)
+            => ResolveAssembly(requestedName);
+
+        private Assembly? ResolveForAppDomain(object? sender, ResolveEventArgs args)
+            => ResolveAssembly(new AssemblyName(args.Name));
+
+        private Assembly? ResolveAssembly(AssemblyName requestedName)
+        {
+            var name = requestedName.Name;
+            if (name is null)
+            {
+                return null;
+            }
+
+            if (string.Equals(name, "Parlot", StringComparison.OrdinalIgnoreCase))
+            {
+                // Return the Parlot assembly that this generator is already using so ISourceable
+                // and runtime types keep the exact same type identity.
+                return typeof(Fluent.Parser<>).Assembly;
+            }
+
+            lock (_sync)
+            {
+                if (_loadedAssemblies.TryGetValue(name, out var loadedAssembly))
+                {
+                    return loadedAssembly;
+                }
+
+                if (_assemblyPaths.TryGetValue(name, out var path))
+                {
+                    try
+                    {
+                        var bytes = File.ReadAllBytes(path);
+                        Assembly asm;
+                        if (_alc is not null)
+                        {
+                            using var stream = new MemoryStream(bytes);
+                            asm = (Assembly)AlcLoadFromStreamMethod!.Invoke(_alc, new object[] { stream })!;
+                        }
+                        else
+                        {
+                            asm = Assembly.Load(bytes);
+                        }
+
+                        _loadedAssemblies[name] = asm;
+                        return asm;
+                    }
+                    catch
+                    {
+                        // Fall through to return null
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public void Dispose()
+        {
+            if (_alc is not null)
+            {
+                if (_alcResolvingHandler is not null)
+                {
+                    AlcResolvingEvent!.RemoveEventHandler(_alc, _alcResolvingHandler);
+                }
+
+                lock (_sync)
+                {
+                    _loadedAssemblies.Clear();
+                }
+
+                AlcUnloadMethod!.Invoke(_alc, null);
+            }
+            else if (_appDomainResolver is not null)
+            {
+                AppDomain.CurrentDomain.AssemblyResolve -= _appDomainResolver;
+                lock (_sync)
+                {
+                    _loadedAssemblies.Clear();
+                }
+            }
         }
     }
 
@@ -946,21 +1052,17 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         var lambdaSourceMap = prepared.LambdaSourceMap;
         var parseOptions = prepared.ParseOptions;
 
-        // Locate the generated type and method via reflection
-        var containingTypeName = methodSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        const string globalPrefix = "global::";
-        if (containingTypeName.StartsWith(globalPrefix, StringComparison.Ordinal))
-        {
-            containingTypeName = containingTypeName.Substring(globalPrefix.Length);
-        }
+        // Locate the generated type and method via reflection using CLR metadata names
+        // (strips C# '@' keyword escapes and joins nested types with '+').
+        var containingTypeName = GetMetadataTypeName(methodSymbol.ContainingType);
 
         var type = assembly.GetType(containingTypeName);
         if (type is null)
         {
-            // This happens in the editor when the emitted assembly can't be loaded correctly
-            // context.ReportDiagnostic(Diagnostic.Create(
-            //     new DiagnosticDescriptor("PARLOT002", "Type not found", "Could not find type '{0}' in emitted assembly", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
-            //     methodSymbol.Locations.FirstOrDefault(), containingTypeName));
+            context.ReportDiagnostic(Diagnostic.Create(
+                TypeNotFoundDescriptor,
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
+                containingTypeName));
             return;
         }
 
@@ -998,7 +1100,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 methodSymbol.Name,
                 ex.InnerException?.Message ?? ex.Message));
             return;
@@ -1013,7 +1115,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 methodSymbol.Name,
                 ex.Message));
             return;
@@ -1028,7 +1130,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 new DiagnosticDescriptor("PARLOT004", "Null parser", "Method '{0}' returned null", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name));
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name));
             return;
         }
 
@@ -1068,7 +1170,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 parserInstance.GetType().FullName,
                 string.Join(", ", parserInstance.GetType().GetInterfaces().Select(i => i.FullName))));
             return;
@@ -1086,7 +1188,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 parserInstance.GetType().FullName));
             return;
         }
@@ -1166,7 +1268,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 parserInstance.GetType().FullName,
                 ex.InnerException?.Message ?? ex.Message));
             return;
@@ -1182,7 +1284,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Error,
                     isEnabledByDefault: true),
-                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodInfo.AttributeLocation ?? GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
                 parserInstance.GetType().FullName,
                 sourceResultObj?.GetType().FullName ?? "null"));
             return;
@@ -1257,7 +1359,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // CountsRecursion: whether entering the helper is one level of the recursion limit, true for the Deferred parsers.
         // The other parsers (Unary) count their own invocations.
         var deferredMethods = new List<(string MethodName, string ValueTypeName, SourceResult Result, string? ParserName, bool CountsRecursion)>();
-        var processedDeferred = new HashSet<object>();
+        var processedDeferred = new HashSet<object>(ReferenceComparer.Instance);
         var deferredToProcess = sgContext.Deferred.Enumerate().ToList();
 
         while (deferredToProcess.Count > 0)
@@ -1567,11 +1669,19 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         if (coreBodyContainsReturn)
         {
             // Parsers with early returns need special handling in Core:
-            // 1. Declare the value variable they reference
+            // 1. Emit any locals declared by the emitter (and declare the value variable if not already declared)
             // 2. Convert "return true" to set result and return
             // 3. Convert "return false" to just return false
 
-            sb.AppendLine($"            {valueTypeName} {result.ValueVariable} = default;");
+            foreach (var local in result.Locals)
+            {
+                sb.Append("            ").AppendLine(local);
+            }
+
+            if (!DeclaresLocal(result.Locals, result.ValueVariable))
+            {
+                sb.AppendLine($"            {valueTypeName} {result.ValueVariable} = default;");
+            }
 
             var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
 
@@ -1824,9 +1934,55 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
         context.ReportDiagnostic(Diagnostic.Create(
             EagerCallbackDescriptor,
-            method.AttributeLocation ?? method.Method.Locations.FirstOrDefault(),
+            method.AttributeLocation ?? GrammarDiagnosticLocation(method.Method.Locations.FirstOrDefault()),
             method.Method.Name));
         return true;
+    }
+
+    private static bool DeclaresLocal(IList<string> locals, string variableName)
+    {
+        foreach (var local in locals)
+        {
+            if (SyntaxFactory.ParseStatement(local) is LocalDeclarationStatementSyntax declaration)
+            {
+                foreach (var variable in declaration.Declaration.Variables)
+                {
+                    if (variable.Identifier.ValueText == variableName)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetMetadataTypeName(INamedTypeSymbol namedType)
+    {
+        var typeNames = new Stack<string>();
+        for (var current = namedType; current is not null; current = current.ContainingType)
+        {
+            typeNames.Push(current.MetadataName);
+        }
+
+        var namespaces = new Stack<string>();
+        for (var ns = namedType.ContainingNamespace; ns is { IsGlobalNamespace: false }; ns = ns.ContainingNamespace)
+        {
+            namespaces.Push(ns.MetadataName);
+        }
+
+        var prefix = namespaces.Count == 0 ? "" : string.Join(".", namespaces) + ".";
+        return prefix + string.Join("+", typeNames);
+    }
+
+    private sealed class ReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
     private static string GetParameterTypeName(IParameterSymbol parameter)
@@ -1867,16 +2023,13 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             named = named.TupleUnderlyingType!;
         }
 
-        var typeNames = new Stack<string>();
         var typeArguments = new List<ITypeSymbol>();
         for (var current = named; current is not null; current = current.ContainingType)
         {
-            typeNames.Push(current.MetadataName);
             typeArguments.InsertRange(0, current.TypeArguments);
         }
 
-        var namespaceName = named.ContainingNamespace.IsGlobalNamespace ? "" : named.ContainingNamespace.ToDisplayString() + ".";
-        var metadataName = namespaceName + string.Join("+", typeNames);
+        var metadataName = GetMetadataTypeName(named);
         var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
         return definition.FullName == metadataName
             && (!type.IsGenericType || type.GetGenericArguments()
@@ -1981,13 +2134,12 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 _ => throw new NotSupportedException("Unsupported lambda syntax.")
             };
             var paramList = GenerateParameterListWithOriginalNames(invokeMethod, ReplaceDiscards(originalParamNames));
-            var body = lambda.Body.ToFullString().Trim();
+            var body = lambda.Body.ToString();
             var asyncModifier = lambda.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "";
 
             if (lambda.Body is BlockSyntax)
             {
                 sb.Append($"        private {staticModifier}{asyncModifier}{returnTypeName} {methodName}({paramList})\n");
-                sb.Append("        ");
                 if (hasLineInfo)
                 {
                     sb.Append(AddLineDirectivesToBody(body, originalLine, originalFilePath!));
@@ -1995,6 +2147,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 }
                 else
                 {
+                    sb.Append("        ");
                     sb.Append(body);
                 }
             }
@@ -2113,47 +2266,15 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
     private static string GetParameterName(int index) => index == 0 ? "arg0" : $"arg{index}";
 
     /// <summary>
-    /// Adds #line directives before each line of a lambda body to enable debugging on any line.
+    /// Prepends a single #line directive before a block lambda body so all lines within the body
+    /// (including multi-line verbatim/raw strings and block comments) map 1:1 back to the original source.
     /// </summary>
     private static string AddLineDirectivesToBody(string body, int startLine, string filePath)
     {
-        var lines = body.Split('\n');
-        if (lines.Length <= 1)
-        {
-            // Single line - just add one directive
-            return $"#line {startLine} {LiteralHelper.StringToLiteral(filePath)}\n{body}";
-        }
-
         var sb = new StringBuilder();
-        var currentLine = startLine;
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i];
-            var trimmedLine = line.TrimStart();
-
-            // Only add #line directive for non-empty lines that contain actual code
-            // Skip adding directives for lines that are just whitespace or closing braces
-            var isSignificantLine = !string.IsNullOrWhiteSpace(trimmedLine) &&
-                                    trimmedLine != "{" &&
-                                    trimmedLine != "}";
-
-            if (isSignificantLine)
-            {
-                AppendLineDirective(sb, currentLine, filePath);
-            }
-
-            sb.Append(line);
-
-            if (i < lines.Length - 1)
-            {
-                sb.Append('\n');
-            }
-
-            // Increment line number for each line in the original source
-            currentLine++;
-        }
-
+        AppendLineDirective(sb, startLine, filePath);
+        sb.Append("        ");
+        sb.Append(body);
         return sb.ToString();
     }
 

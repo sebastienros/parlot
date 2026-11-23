@@ -103,7 +103,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
 
         if (_parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("Then requires a source-generatable parser.");
+            throw new NotSupportedException($"Then requires a source-generatable parser, but {SourceGenerationContext.DescribeParser(_parser)} does not implement ISourceable.");
         }
 
         if (SpanSource.TryGenerate(this, typeof(U), context) is { } spanResult)

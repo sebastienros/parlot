@@ -64,7 +64,7 @@ namespace Parlot.SourceGenerator;
 /// These examples belong in build-only .parlot.cs files with matching partial parsing declarations
 /// in normal source files. Included files are added to the build compilation, not emitted into the application.
 /// </remarks>
-[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = false)]
+[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = true)]
 #if SOURCE_GENERATOR
 internal
 #else

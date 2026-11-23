@@ -2,6 +2,7 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Parlot.Fluent;
 
@@ -11,9 +12,9 @@ namespace Parlot.Fluent;
 /// above ASCII.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
-public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
+public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
-    // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
+    // Kept for its seek hints (CanSeek, ExpectedChars, ExpectedPrefixes) and CaseCache; runtime and generated code match inline
     private readonly TextLiteral _textLiteral;
     private readonly bool _returnText;
 
@@ -260,64 +261,151 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
             return context.GenerateToken(this, typeof(string), () => GenerateSource(context));
         }
 
-        if (_textLiteral is not ISourceable sourceable)
-        {
-            throw new NotSupportedException("KeywordLiteral requires a source-generatable text parser.");
-        }
-
-        var result = context.CreateResult(typeof(string));
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
 
-        var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
+        var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
+        var comparison = $"global::System.StringComparison.{Comparison}";
 
-        // Use helper for the text literal
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Keyword", valueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+        // Use direct SourceResult construction for early return optimization, matching Parse directly:
+        // check text match and keyword boundary before advancing so a boundary mismatch never moves
+        // the cursor (preserving FurthestOffset parity) and never touches CaseCache.
+        var result = new SourceResult(
+            successVariable: "success", // Not used with early returns
+            valueVariable: "value",
+            valueTypeName: valueTypeName);
 
-        var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+        var spanName = $"span{context.NextNumber()}";
+        var nextName = $"next{context.NextNumber()}";
+        var isIdentifierPart = HasCustomIdentifierPart
+            ? GenerateIsIdentifierPart(nextName)
+            : $"(global::Parlot.Character.IsInRange({nextName}, 'a', 'z') || global::Parlot.Character.IsInRange({nextName}, 'A', 'Z'))";
 
-        // if (Helper(context, out var innerValue))
-        // {
-        //     // Check keyword boundary: cursor.Eof || (!IsInRange(current, 'a', 'z') && !IsInRange(current, 'A', 'Z'))
-        //     if (cursor.Eof || (!Character.IsInRange(cursor.Current, 'a', 'z') && !Character.IsInRange(cursor.Current, 'A', 'Z')))
-        //     {
-        //         success = true;
-        //         value = innerValue;
-        //     }
-        //     else
-        //     {
-        //         cursor.ResetPosition(start);
-        //     }
-        // }
-
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {outTarget}))");
+        result.Body.Add($"if ({cursorName}.Match({textLiteral}.AsSpan(), {comparison}))");
         result.Body.Add("{");
+        result.Body.Add($"    var {spanName} = {cursorName}.Span;");
+        result.Body.Add($"    if ({spanName}.Length > {lengthLiteral})");
+        result.Body.Add("    {");
+        result.Body.Add($"        var {nextName} = {spanName}[{lengthLiteral}];");
+        result.Body.Add($"        if ({isIdentifierPart})");
+        result.Body.Add("        {");
+        result.Body.Add($"            {result.ValueVariable} = default;");
+        result.Body.Add("            return false;");
+        result.Body.Add("        }");
+        result.Body.Add("    }");
 
-        if (!HasCustomIdentifierPart)
+        var shouldReturnMatchedText = !context.DiscardResult && !_returnText;
+        var startName = $"start{context.NextNumber()}";
+        if (shouldReturnMatchedText)
         {
-            result.Body.Add($"    if ({cursorName}.Eof || (!Parlot.Character.IsInRange({cursorName}.Current, 'a', 'z') && !Parlot.Character.IsInRange({cursorName}.Current, 'A', 'Z')))");
+            result.Body.Add($"    var {startName} = {cursorName}.Offset;");
+        }
+
+        // Reaching buffer end marks HitEnd via AdvanceNoNewLines -> AdvanceToEnd.
+        result.Body.Add($"    {cursorName}.AdvanceNoNewLines({lengthLiteral});");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = default;");
+        }
+        else if (shouldReturnMatchedText)
+        {
+            var bufferName = $"buffer{context.NextNumber()}";
+            var parsedTextName = $"parsedText{context.NextNumber()}";
+            result.Body.Add($"    var {bufferName} = {cursorName}.Buffer;");
+            result.Body.Add($"    var {parsedTextName} = {cursorName}.GetSpan({startName}, {lengthLiteral});");
+            result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
+            result.Body.Add($"        ? {textLiteral}");
+            result.Body.Add($"        : {startName} == {cursorName}.BufferStart && {lengthLiteral} == {bufferName}.Length ? {bufferName} : {context.GetCaseCacheField(_textLiteral.Cases!)}.Get({parsedTextName});");
         }
         else
         {
-            var nextName = $"next{context.NextNumber()}";
-
-            result.Body.Add($"    var {nextName} = {cursorName}.Current;");
-            result.Body.Add($"    if ({cursorName}.Eof || !{GenerateIsIdentifierPart(nextName)})");
+            result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
         }
 
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
+        result.Body.Add("    return true;");
         result.Body.Add("}");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
 
         return result;
+    }
+
+    // Ordinal and OrdinalIgnoreCase keywords always consume Text.Length chars; culture-sensitive comparisons
+    // can match a different number of chars than Text.Length.
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
+        => Comparison is StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase ? 1 : -1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
+        var length = Text.Length;
+        var lengthLiteral = length.ToString(CultureInfo.InvariantCulture);
+
+        if (length == 1 && Comparison == StringComparison.Ordinal)
+        {
+            writer.BeginBlock($"if ((uint){pos} >= (uint){span}.Length || {span}[{pos}] != {LiteralHelper.CharToLiteral(Text[0])})");
+            writer.Fail(fail);
+            writer.EndBlock();
+        }
+        else if (length > 0)
+        {
+            var comparisonArg = Comparison == StringComparison.Ordinal ? "" : $", global::System.StringComparison.{Comparison}";
+            writer.BeginBlock($"if (!global::System.MemoryExtensions.StartsWith({span}.Slice({pos}), {textLiteral}.AsSpan(){comparisonArg}))");
+            // A shorter remainder only proves a mismatch when it already differs from the text, like Cursor.Match
+            writer.Add($"if ({span}.Length - {pos} < {lengthLiteral} && global::System.MemoryExtensions.StartsWith({textLiteral}.AsSpan(), {span}.Slice({pos}){comparisonArg})) {writer.MarkHitEnd}");
+            writer.Add(fail.Goto());
+            writer.EndBlock();
+        }
+
+        // Check keyword boundary before advancing pos so a boundary mismatch leaves pos unmoved.
+        var nextPosName = length > 0 ? $"nextPos{writer.Context.NextNumber()}" : pos;
+        if (length > 0)
+        {
+            writer.Add($"var {nextPosName} = {pos} + {lengthLiteral};");
+        }
+
+        var nextName = $"next{writer.Context.NextNumber()}";
+        var isIdentifierPart = HasCustomIdentifierPart
+            ? GenerateIsIdentifierPart(nextName)
+            : $"(global::Parlot.Character.IsInRange({nextName}, 'a', 'z') || global::Parlot.Character.IsInRange({nextName}, 'A', 'Z'))";
+
+        writer.BeginBlock($"if ((uint){nextPosName} < (uint){span}.Length)");
+        writer.Add($"var {nextName} = {span}[{nextPosName}];");
+        writer.BeginBlock($"if ({isIdentifierPart})");
+        writer.Add(fail.Goto());
+        writer.EndBlock();
+        writer.EndBlock();
+        writer.BeginBlock("else");
+        // The keyword ended at the buffer boundary; the next char after a refill might continue an identifier.
+        writer.Add(writer.MarkHitEnd);
+        writer.EndBlock();
+
+        if (valueVariable != null)
+        {
+            if (_returnText)
+            {
+                writer.Add($"{valueVariable} = {textLiteral};");
+            }
+            else
+            {
+                var bufferName = $"buffer{writer.Context.NextNumber()}";
+                var parsedTextName = $"parsedText{writer.Context.NextNumber()}";
+                writer.Add($"var {bufferName} = {writer.Cursor}.Buffer;");
+                writer.Add($"var {parsedTextName} = {span}.Slice({pos}, {lengthLiteral});");
+                writer.Add($"{valueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
+                writer.Add($"    ? {textLiteral}");
+                writer.Add($"    : {writer.SpanStart} + {pos} == {writer.Cursor}.BufferStart && {lengthLiteral} == {bufferName}.Length ? {bufferName} : {writer.Context.GetCaseCacheField(_textLiteral.Cases!)}.Get({parsedTextName});");
+            }
+        }
+
+        if (length > 0)
+        {
+            writer.Add($"{pos} = {nextPosName};");
+        }
     }
 
     public override string ToString() => $"Keyword(\"{Text}\")";

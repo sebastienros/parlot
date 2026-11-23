@@ -252,10 +252,6 @@ public sealed class LambdaRegistry
         {
             return string.Empty;
         }
-        if (type == typeof(TextSpan))
-        {
-            return new TextSpan(string.Empty);
-        }
         
         return null;
     }
@@ -273,14 +269,15 @@ public sealed class LambdaRegistry
     /// </summary>
     public string? GetSourceCode(int id)
     {
-        // Find the registration with this ID
-        foreach (var (regId, _, pointer) in _registrations)
+        if ((uint)id < (uint)_registrations.Count)
         {
-            if (regId == id && pointer >= 0 && _pointerToSource.TryGetValue(pointer, out var source))
+            var pointer = _registrations[id].Pointer;
+            if (pointer >= 0 && _pointerToSource.TryGetValue(pointer, out var source))
             {
                 return source;
             }
         }
+
         return null;
     }
 
@@ -289,14 +286,9 @@ public sealed class LambdaRegistry
     /// </summary>
     public int GetPointer(int id)
     {
-        foreach (var (regId, _, pointer) in _registrations)
-        {
-            if (regId == id)
-            {
-                return pointer;
-            }
-        }
-        return -1;
+        return (uint)id < (uint)_registrations.Count
+            ? _registrations[id].Pointer
+            : -1;
     }
 
     /// <summary>

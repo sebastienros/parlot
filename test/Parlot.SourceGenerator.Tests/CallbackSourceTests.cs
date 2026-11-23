@@ -112,7 +112,7 @@ public class CallbackSourceTests
 
         var source = Generate(root, path, lineDirectives: null);
 
-        Assert.Contains("#line 15 \"" + path.Replace("\\", "\\\\") + "\"", source, StringComparison.Ordinal);
+        Assert.Contains("#line 14 \"" + path.Replace("\\", "\\\\") + "\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class CallbackSourceTests
 
         var source = Generate(first, Path.Combine(first, "Parsing", "Grammar.parlot.cs"), "relative");
 
-        Assert.Contains("#line 15 \"Parsing/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
+        Assert.Contains("#line 14 \"Parsing/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain(first, source, StringComparison.Ordinal);
         Assert.Equal(source, Generate(second, Path.Combine(second, "Parsing", "Grammar.parlot.cs"), "Relative"));
     }
@@ -160,7 +160,72 @@ public class CallbackSourceTests
 
         var source = Generate(Path.Combine(root, "project"), Path.Combine(root, "shared", "Grammar.parlot.cs"), "relative");
 
-        Assert.Contains("#line 15 \"../shared/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
+        Assert.Contains("#line 14 \"../shared/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Block_Lambda_Line_Directives_Preserve_Verbatim_Strings_And_Block_Comments()
+    {
+        const string declaration = """
+            public static partial class VerbatimGrammar
+            {
+                public static partial bool TryParse(string text, out string value);
+            }
+            """;
+
+        // Intentionally uses CRLF and Allman-style block lambda with multi-line verbatim string + block comment
+        var grammar = string.Join("\r\n",
+            "using Parlot.Fluent;",
+            "using Parlot.SourceGenerator;",
+            "using static Parlot.Fluent.Parsers;",
+            "public static partial class VerbatimGrammar",
+            "{",
+            "    [GenerateParser(nameof(TryParse))]",
+            "    private static Parser<string> Build()",
+            "        => Terms.NonWhiteSpace().Then(static name =>",
+            "        {", // line 9
+            "            /* multi-line", // line 10
+            "               block comment */", // line 11
+            "            var template = @\"first", // line 12
+            "second", // line 13
+            "third\";", // line 14
+            "            return name + \":\" + template;", // line 15
+            "        });", // line 16
+            "}");
+
+        var root = Path.Combine(Path.GetTempPath(), "verbatim-checkout");
+        var grammarPath = Path.Combine(root, "Verbatim.parlot.cs");
+        var options = DefaultOptions(root);
+        options["build_property.ParlotLineDirectives"] = "relative";
+
+        var (result, compilation) = RunStandalone(declaration, grammar, options, grammarPath: grammarPath);
+        AssertNoErrors(result, compilation);
+
+        var generatedTree = result.Results.SelectMany(static item => item.GeneratedSources)
+            .Single(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)).SyntaxTree;
+        var sourceText = generatedTree.ToString();
+
+        // Single #line directive before the block body on line 9 (not per-line, no off-by-one)
+        Assert.Contains("#line 9 \"Verbatim.parlot.cs\"", sourceText, StringComparison.Ordinal);
+        Assert.Equal(1, sourceText.Split("#line 9 \"Verbatim.parlot.cs\"").Length - 1);
+        Assert.DoesNotContain("#line 10", sourceText, StringComparison.Ordinal);
+        Assert.DoesNotContain("#line 12", sourceText, StringComparison.Ordinal);
+        Assert.DoesNotContain("#line 13", sourceText, StringComparison.Ordinal);
+
+        // Verify Roslyn maps the return statement inside the block to exact original line 15
+        var returnIndex = sourceText.IndexOf("return name", StringComparison.Ordinal);
+        Assert.True(returnIndex >= 0);
+        var mappedSpan = generatedTree.GetMappedLineSpan(new Microsoft.CodeAnalysis.Text.TextSpan(returnIndex, 6));
+        Assert.Equal("Verbatim.parlot.cs", mappedSpan.Path);
+        Assert.Equal(15, mappedSpan.StartLinePosition.Line + 1);
+
+        // Verify runtime execution produces the exact uncorrupted multi-line verbatim string
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var parse = Assembly.Load(stream.ToArray()).GetType("VerbatimGrammar")!.GetMethod("TryParse")!;
+        object?[] arguments = ["ok", null];
+        Assert.True((bool)parse.Invoke(null, arguments)!);
+        Assert.Equal("ok:first\r\nsecond\r\nthird", arguments[1]);
     }
 
     private static string Generate(string projectDirectory, string grammarPath, string? lineDirectives)

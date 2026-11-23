@@ -145,7 +145,7 @@ internal sealed class SequenceStartSource
     {
         if (parser is not ISourceable sourceable)
         {
-            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+            throw new NotSupportedException($"Sequence requires source-generatable parsers, but {SourceGenerationContext.DescribeParser(parser)} does not implement ISourceable.");
         }
 
         var ctx = _context.ParseContextName;
