@@ -1119,16 +1119,22 @@ public class Scanner
                         break;
 
                     case 'u':
-
+                    {
                         // https://stackoverflow.com/a/32175520/142772
                         // exactly 4 digits
+                        var remaining = Cursor.Span;
 #if NET8_0_OR_GREATER
-                        var allHexDigits = Cursor.Span.Length > 4 && Cursor.Span.Slice(1, 4).IndexOfAnyExcept(Character._hexDigits) == -1;
-                        var isValidUnicode = allHexDigits;
-
+                        var isValidUnicode = remaining.Length > 4 && remaining.Slice(1, 4).IndexOfAnyExcept(Character._hexDigits) == -1;
+#else
+                        var isValidUnicode = remaining.Length > 4
+                            && Character.IsHexDigit(remaining[1])
+                            && Character.IsHexDigit(remaining[2])
+                            && Character.IsHexDigit(remaining[3])
+                            && Character.IsHexDigit(remaining[4]);
+#endif
                         if (!isValidUnicode)
                         {
-                            if (Cursor.Span.Length <= 4)
+                            if (remaining.Length <= 4)
                             {
                                 Cursor.MarkHitEnd();
                             }
@@ -1139,51 +1145,34 @@ public class Scanner
                             return false;
                         }
 
-                        // Advance the cursor by the 4 digits
-                        Cursor.Advance(4);
-#else
-                        var isValidUnicode = false;
-
-                        Cursor.Advance();
-
-                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
-                        {
-                            Cursor.Advance();
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
-                            {
-                                Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
-                                {
-                                    Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
-                                    {
-                                        isValidUnicode = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!isValidUnicode)
-                        {
-                            Cursor.ResetPosition(start);
-
-                            result = default;
-                            return false;
-                        }
-#endif
+                        // Advance past 'u' and the 4 digits
+                        Cursor.Advance(5);
                         break;
+                    }
                     case 'x':
-
-                        // At least one digits
+                    {
+                        // 1 to 4 hex digits, matching Character.ScanHexEscape
+                        var remaining = Cursor.Span;
+                        var maxHexDigits = Math.Min(4, remaining.Length - 1);
 #if NET8_0_OR_GREATER
-                        var firstNonHexDigit = Cursor.Span.Length > 1 ? Cursor.Span.Slice(1).IndexOfAnyExcept(Character._hexDigits) : -1;
-                        var isValidHex = firstNonHexDigit > 0;
+                        var hexDigits = maxHexDigits > 0 ? remaining.Slice(1, maxHexDigits).IndexOfAnyExcept(Character._hexDigits) : 0;
 
-                        if (!isValidHex)
+                        if (hexDigits == -1)
                         {
-                            if (firstNonHexDigit == -1)
+                            hexDigits = maxHexDigits;
+                        }
+#else
+                        var hexDigits = 0;
+
+                        while (hexDigits < maxHexDigits && Character.IsHexDigit(remaining[1 + hexDigits]))
+                        {
+                            hexDigits++;
+                        }
+#endif
+                        if (hexDigits == 0)
+                        {
+                            if (remaining.Length == 1)
                             {
-                                // The hex digits run to the end of the buffer
                                 Cursor.MarkHitEnd();
                             }
 
@@ -1193,43 +1182,10 @@ public class Scanner
                             return false;
                         }
 
-                        // Advance the cursor for the read digits
-                        Cursor.Advance(firstNonHexDigit);
-#else
-                        var isValidHex = false;
-
-                        Cursor.Advance();
-
-                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
-                        {
-                            isValidHex = true;
-
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
-                            {
-                                Cursor.Advance();
-
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
-                                {
-                                    Cursor.Advance();
-
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
-                                    {
-                                        Cursor.Advance();
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!isValidHex)
-                        {
-                            Cursor.ResetPosition(start);
-
-                            result = default;
-                            return false;
-                        }
-#endif
-
+                        // Advance past 'x' and the consumed digits
+                        Cursor.Advance(1 + hexDigits);
                         break;
+                    }
                     default:
 
                         // The quote char can be escaped, whichever it is. Match excludes the null char the cursor

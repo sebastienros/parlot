@@ -179,7 +179,7 @@ public static partial class Numbers
 
             // A fixed-size type wraps past its largest value, an arbitrary-precision one doesn't (and its unsigned
             // shift of -1 is not its largest value either)
-            Bounded = max + TNumber.One < max;
+            Bounded = unchecked(max + TNumber.One) < max;
 
             if (!Bounded)
             {
@@ -291,13 +291,13 @@ public static partial class Numbers
                 where TNumber : INumber<TNumber>
         {
                 // The digits are only decimal ones without a hex or binary style
-                if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && (uint)(span.Length - 1) < MaxFastDigits)
+                if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && unchecked((uint)(span.Length - 1)) < MaxFastDigits)
                 {
                         long parsed = 0;
 
                         foreach (var c in span)
                         {
-                                var digit = (uint)(c - '0');
+                                var digit = unchecked((uint)(c - '0'));
 
                                 if (digit > 9)
                                 {
@@ -326,15 +326,15 @@ public static partial class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryGetDigit(char c, int radix, out int digit)
     {
-        if ((uint)(c - '0') <= 9)
+        if (unchecked((uint)(c - '0')) <= 9)
         {
             digit = c - '0';
         }
-        else if ((uint)(c - 'A') <= 5)
+        else if (unchecked((uint)(c - 'A')) <= 5)
         {
             digit = c - 'A' + 10;
         }
-        else if ((uint)(c - 'a') <= 5)
+        else if (unchecked((uint)(c - 'a')) <= 5)
         {
             digit = c - 'a' + 10;
         }
@@ -376,7 +376,7 @@ public static partial class Numbers
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsValidRadix(int radix) => (uint)(radix - 2) <= 14;
+    private static bool IsValidRadix(int radix) => unchecked((uint)(radix - 2)) <= 14;
 
     // The digits of the last number read with underscores on this thread
     [ThreadStatic]

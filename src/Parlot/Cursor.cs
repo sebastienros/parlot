@@ -93,7 +93,7 @@ public class Cursor
         Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _textLength = Buffer.Length;
 
-        if ((uint)position.Offset > (uint)_textLength)
+        if (position.Offset < 0 || position.Offset > _textLength)
         {
             throw new ArgumentOutOfRangeException(nameof(position));
         }
@@ -949,7 +949,7 @@ public class Cursor
         var buffer = Buffer;
 
         // The length of the buffer, rather than _textLength which is the same, lets the JIT remove the bounds check
-        if ((uint)offset < (uint)buffer.Length)
+        if (unchecked((uint)offset) < (uint)buffer.Length)
         {
             _offset = offset;
             Current = buffer[offset];
@@ -1160,7 +1160,7 @@ public class Cursor
     {
         RecordFailure(offset);
 
-        if (reason is not null && offset > _reasonOffset)
+        if (reason is not null && offset == _furthestOffset && offset > _reasonOffset)
         {
             _reason = reason;
             _reasonOffset = offset;
@@ -1170,7 +1170,12 @@ public class Cursor
     /// <summary>
     /// The furthest offset recorded so far, for <see cref="RestoreRecordedFailure(int)"/>.
     /// </summary>
-    internal int RecordedFailure => _furthestOffset;
+    /// <remarks>
+    /// Encoded as non-negative when a reason is already recorded at <see cref="_furthestOffset"/>, and as
+    /// <c>~_furthestOffset</c> (negative) otherwise, so <see cref="RestoreRecordedFailure(int)"/> forgets a reason
+    /// newly recorded at the same offset while preserving one that was already there.
+    /// </remarks>
+    internal int RecordedFailure => _reasonOffset == _furthestOffset ? _furthestOffset : ~_furthestOffset;
 
     /// <summary>
     /// Forgets the failures recorded since <paramref name="recordedFailure"/> was read from <see cref="RecordedFailure"/>.
@@ -1181,13 +1186,28 @@ public class Cursor
     /// </remarks>
     internal void RestoreRecordedFailure(int recordedFailure)
     {
-        _furthestOffset = recordedFailure;
-
-        // A reason recorded since is forgotten too, so that a later failure at its offset doesn't bring it back
-        if (_reasonOffset > recordedFailure)
+        if (recordedFailure >= 0)
         {
-            _reason = null;
-            _reasonOffset = -1;
+            _furthestOffset = recordedFailure;
+
+            // A reason was already recorded at recordedFailure: forget only one recorded further
+            if (_reasonOffset > recordedFailure)
+            {
+                _reason = null;
+                _reasonOffset = -1;
+            }
+        }
+        else
+        {
+            var offset = ~recordedFailure;
+            _furthestOffset = offset;
+
+            // No reason was recorded at offset when it was read: forget any reason recorded at or past it
+            if (_reasonOffset >= offset)
+            {
+                _reason = null;
+                _reasonOffset = -1;
+            }
         }
     }
 

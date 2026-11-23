@@ -743,6 +743,197 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void RetryTokenRollsBackDiagnosticsAcrossBufferBoundaries()
+    {
+        var parser = Terms.Identifier().Then(static s => s.ToString())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"))
+            .Eof();
+
+        ParseContext? captured = null;
+        var options = new StreamParseOptions
+        {
+            BufferSize = 2,
+            ContextFactory = (scanner, ct) => captured = new ParseContext(scanner, ct) { CollectDiagnostics = true },
+        };
+
+        var result = parser.Parse(new ChunkedReader("/* multi-line comment spanning buffers */ ident", 1), options);
+
+        Assert.Equal("ident", result);
+        Assert.Empty(captured!.Diagnostics);
+    }
+
+    [Fact]
+    public void CommitInsideTokenDoesNotBreakRetryAndNeverRegresses()
+    {
+        // A parser using Commit inside a token that hits end-of-buffer and retries
+        var tokenWithCommit = new TokenWithCommitParser();
+        var parser = tokenWithCommit.AndSkip(Literals.Char('!')).Eof();
+
+        var result = parser.Parse(new ChunkedReader("abcdef!", 1), new StreamParseOptions { BufferSize = 2 });
+        Assert.Equal("abcdef", result);
+
+        // CommitOffset must never regress if cursor moved back before an earlier commit
+        var commitParser = OneOf(
+            Literals.Text("ab").Commit().AndSkip(Literals.Char('x')).Then(static _ => "first"),
+            Always<string>("fallback").Commit());
+
+        var exception = Assert.Throws<ParseException>(() =>
+            commitParser.Parse(new ChunkedReader("ab!", 1), new StreamParseOptions { BufferSize = 2 }));
+        Assert.Contains("Commit()", exception.Message);
+    }
+
+    [Fact]
+    public void TryMatchUnpinsOnExceptionAndIsMatchDoesNotPinFullStream()
+    {
+        var failing = Literals.Char('a').AndSkip(Literals.Char('b').ElseError("Expected b"));
+        var rest = Literals.Char('a').And(ZeroOrMany(Literals.Char('x'))).Eof();
+        var text = "a" + new string('x', 200);
+        var (options1, peak1) = Observe(new StreamParseOptions { BufferSize = 4, MaxBufferedCharacters = 16 });
+
+        // Run TryMatch (which throws ParseException internally) then IsMatch on the same compacting ParseContext:
+        // if TryMatch leaked its pin at offset 0, reading >16 chars would fail MaxBufferedCharacters.
+        var driver1 = Always<bool>(true).Then((context, ignored) =>
+        {
+            Assert.False(failing.TryMatch(context, out _, out var error));
+            Assert.NotNull(error);
+            Assert.Equal("Expected b", error!.Message);
+            context.Scanner.Cursor.ResetPosition(0);
+            return rest.IsMatch(context);
+        });
+
+        Assert.True(driver1.Parse(new ChunkedReader(text, 1), options1));
+        Assert.InRange(peak1(), 1, 16);
+
+        // IsMatch on a long stream with tight MaxBufferedCharacters must not pin the entire stream
+        var longText = new string('x', 500);
+        var (options2, peak2) = Observe(new StreamParseOptions { BufferSize = 4, MaxBufferedCharacters = 16 });
+        var driver2 = Always<bool>(true).Then(static (context, _) => ZeroOrMany(Literals.Char('x')).Eof().IsMatch(context));
+
+        Assert.True(driver2.Parse(new ChunkedReader(longText, 1), options2));
+        Assert.InRange(peak2(), 1, 16);
+    }
+
+    [Fact]
+    public void LongestWithSelectorPinsSingleAlternativeInCompactingMode()
+    {
+        // Distinct first chars so the lookup table puts only 1 parser in 'a''s bucket
+        var longA = Literals.Char('a').And(ZeroOrMany(Literals.Char('a'))).Then(static x => 1 + x.Item2.Count);
+        var longB = Literals.Char('b').Then(static _ => 0);
+
+        // Selector rejects the match (-1), forcing backtracking to start across refills
+        var rejecting = Longest(
+            static matches => matches[0].Value > 20 ? -1 : 0,
+            longA,
+            longB);
+
+        var parser = OneOf(
+            rejecting.AndSkip(Literals.Char('!')),
+            ZeroOrMany(Literals.Char('a')).AndSkip(Literals.Char('!')).Then(static list => -list.Count));
+
+        var input = new string('a', 40) + "!";
+        var result = parser.Parse(new ChunkedReader(input, 1), new StreamParseOptions { BufferSize = 4 });
+        Assert.Equal(-40, result);
+    }
+
+    [Fact]
+    public void MaxBufferedCharactersHandlesExactLimitAndPreservesLookbehind()
+    {
+        // A 1-char input fits within MaxBufferedCharacters = 1
+        var singleChar = Literals.Char('a').Eof();
+        var limit1 = new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 1 };
+        Assert.Equal('a', singleChar.Parse(new ChunkedReader("a", 1), limit1));
+
+        // Multi-char input exceeds MaxBufferedCharacters = 1 (needs room for lookbehind + next char)
+        var twoChar = Literals.Text("ab").Eof();
+        var ex = Assert.Throws<ParseException>(() => twoChar.Parse(new ChunkedReader("ab", 1), limit1));
+        Assert.Contains("1", ex.Message);
+
+        // MaxBufferedCharacters = 2 parses a 2-char stream ("ab") with lookbehind intact
+        var pair = Literals.Char('a').And(Literals.Char('b')).Eof();
+        var limit2 = new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 2 };
+        Assert.Equal(('a', 'b'), pair.Parse(new ChunkedReader("ab", 1), limit2));
+
+        // MaxBufferedCharacters = 3 streams arbitrarily long 1-char tokens with lookbehind intact
+        var repeated = ZeroOrMany(Literals.Char('a').Or(Literals.Char('b'))).Eof();
+        var limit3 = new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 3 };
+        var result = repeated.Parse(new ChunkedReader("abababab", 1), limit3);
+        Assert.Equal(['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b'], result);
+
+        // An input matching MaxBufferedCharacters exactly succeeds
+        var exact16 = new string('a', 16);
+        var limit16 = new StreamParseOptions { BufferSize = 4, MaxBufferedCharacters = 16 };
+        Assert.Equal(exact16, Literals.Text(exact16).Eof().Parse(new ChunkedReader(exact16, 1), limit16));
+    }
+
+    [Fact]
+    public void TextScannerLookbehindInvariantHoldsUnderTightMaxBufferedCharacters()
+    {
+        // A TextScanner that matches '#' only at start-of-input or start-of-line
+        static int LineStartHash(ReadOnlySpan<char> text, int position)
+        {
+            if (position > 0 && text[position - 1] != '\n')
+            {
+                return 0;
+            }
+
+            return position < text.Length && text[position] == '#' ? 1 : 0;
+        }
+
+        var lineStartHash = Literals.Scan(LineStartHash, ['#']);
+        var parser = Literals.Char('x').And(lineStartHash).Eof();
+
+        // String parse: '#' is preceded by 'x', so lineStartHash must NOT match
+        Assert.False(parser.TryParse("x#", out _));
+
+        // Tight MaxBufferedCharacters = 2: '#' is at offset 1, 'x' stays as lookbehind -> still must NOT falsely match
+        Assert.False(parser.TryParse(new ChunkedReader("x#", 1), out _, new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 2 }));
+
+        // Even with a longer prefix followed by "#a" and tight MaxBufferedCharacters = 3, 'x' stays buffered as lookbehind
+        var longer = Literals.Char('x').And(lineStartHash).And(Literals.Char('a')).Eof();
+        Assert.False(longer.TryParse("x#a", out _));
+        Assert.False(longer.TryParse(new ChunkedReader("x#a", 1), out _, new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 3 }));
+
+        // When MaxBufferedCharacters = 2 cannot hold lookbehind + token + next char, it throws ParseException rather than dropping lookbehind
+        var pinned = Literals.Text("xx").And(lineStartHash.Or(Literals.Char('#').Then(static _ => new TextSpan("#")))).And(Literals.Char('a')).Eof();
+        Assert.Throws<ParseException>(() => pinned.Parse(new ChunkedReader("xx#a", 1), new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 2 }));
+
+        // After '\n', lineStartHash DOES match under tight MaxBufferedCharacters
+        var afterNewLine = Literals.Char('\n').And(lineStartHash).And(Literals.Char('a')).Eof();
+        Assert.True(afterNewLine.TryParse("\n#a", out _));
+        Assert.True(afterNewLine.TryParse(new ChunkedReader("\n#a", 1), out _, new StreamParseOptions { BufferSize = 1, MaxBufferedCharacters = 3 }));
+    }
+
+    private sealed class TokenWithCommitParser : Parser<string>
+    {
+        private static readonly Parser<string> CommittedPrefix = Literals.Text("ab").Commit();
+
+        public override bool Parse(ParseContext context, ref ParseResult<string> result)
+        {
+            if (context.IsCompacting)
+            {
+                return context.ParseToken(this, ref result);
+            }
+
+            context.EnterParser(this);
+            var cursor = context.Scanner.Cursor;
+            var start = cursor.Offset;
+            var prefixResult = new ParseResult<string>();
+
+            if (CommittedPrefix.Parse(context, ref prefixResult) && cursor.Match("cdef"))
+            {
+                cursor.Advance(4);
+                result.Set(start, cursor.Offset, "abcdef");
+                context.ExitParser(this);
+                return true;
+            }
+
+            cursor.ResetPosition(start);
+            context.ExitParser(this);
+            return false;
+        }
+    }
+
+    [Fact]
     public void ContextFactoriesMustUseTheScanner()
     {
         var options = new StreamParseOptions { ContextFactory = static (_, ct) => new ParseContext(new Scanner("a"), ct) };

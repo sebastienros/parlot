@@ -348,7 +348,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             var from = cursor.Offset;
 
             // Each alternative is read from the same position, and the cursor moves to the end of the one that is kept
-            var pin = parsers.Length > 1 ? context.Pin() : -1;
+            var pin = parsers.Length > 1 || _selecting ? context.Pin() : -1;
 
             var matches = new ListBuilder<LongestMatch<T>>();
 
@@ -388,9 +388,12 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
                         // A match isn't a failure where it ends: the selector can keep a shorter one or none, and the
                         // cursor ends after the longest one otherwise
-                        var recorded = cursor.RecordedFailure;
-                        cursor.ResetPosition(from);
-                        cursor.RestoreRecordedFailure(recorded);
+                        if (_selecting || i < parsers.Length - 1)
+                        {
+                            var recorded = cursor.RecordedFailure;
+                            cursor.ResetPosition(from);
+                            cursor.RestoreRecordedFailure(recorded);
+                        }
                     }
                     else if (collecting)
                     {
@@ -405,7 +408,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
                         : _contextSelector!(context, new LongestMatches<T>(in matches));
 
                     // The match is read through the builder after the callback, which can parse
-                    if ((uint)index < (uint)matches.Count)
+                    if (unchecked((uint)index < (uint)matches.Count))
                     {
                         var match = matches[index];
 
@@ -430,9 +433,8 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             finally
             {
                 matches.Release();
+                context.Unpin(pin);
             }
-
-            context.Unpin(pin);
         }
 
         if (!success)
@@ -678,7 +680,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             var parsers = alternatives.Parsers;
 
             // Each alternative is read from the same position, and the cursor moves to the end of the one that is kept
-            if (pinName != null && parsers.Length > 1)
+            if (pinName != null && (parsers.Length > 1 || _selecting))
             {
                 result.Body.Add($"{indent}{pinName} = {ctx}.Pin();");
             }
@@ -786,7 +788,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             result.Body.Add($"if ({matchesName}.Count > 0)");
             result.Body.Add("{");
             result.Body.Add($"    var {indexName} = {call};");
-            result.Body.Add($"    if ((uint){indexName} < (uint){matchesName}.Count)");
+            result.Body.Add($"    if (unchecked((uint){indexName} < (uint){matchesName}.Count))");
             result.Body.Add("    {");
             result.Body.Add($"        var {matchName} = {matchesName}[{indexName}];");
             result.Body.Add($"        {endName} = {matchName}.End;");

@@ -12,7 +12,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(string text)
     {
-        return TryMatch(new ParseContext(new Scanner(text)), out _, out _, withReason: false);
+        return IsMatch(new ParseContext(new Scanner(text)));
     }
 
     /// <summary>
@@ -23,7 +23,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(string text, CancellationToken cancellationToken)
     {
-        return TryMatch(new ParseContext(new Scanner(text), cancellationToken), out _, out _, withReason: false);
+        return IsMatch(new ParseContext(new Scanner(text), cancellationToken));
     }
 
     /// <summary>
@@ -33,7 +33,23 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(ParseContext context)
     {
-        return TryMatch(context, out _, out _, withReason: false);
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        context.Scanner.Cursor.ResetFurthestOffset();
+
+        try
+        {
+            var result = new ParseResult<T>();
+            return ParseWithoutValue(context, ref result);
+        }
+        catch (ParseException)
+        {
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -129,8 +145,16 @@ public abstract partial class Parser<T>
 
             // The matched text must still be buffered once the parser is done
             var pin = context.Pin();
-            var success = ParseWithoutValue(context, ref result);
-            context.Unpin(pin);
+            bool success;
+
+            try
+            {
+                success = ParseWithoutValue(context, ref result);
+            }
+            finally
+            {
+                context.Unpin(pin);
+            }
 
             if (success)
             {

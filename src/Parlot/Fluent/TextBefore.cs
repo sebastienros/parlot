@@ -20,7 +20,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
 #endif
     public TextBefore(Parser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
     {
-        _delimiter = delimiter;
+        _delimiter = delimiter ?? throw new ArgumentNullException(nameof(delimiter));
         _canBeEmpty = canBeEmpty;
         _failOnEof = failOnEof;
         _consumeDelimiter = consumeDelimiter;
