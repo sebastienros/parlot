@@ -1,7 +1,4 @@
 ﻿using System;
-#if NET8_0_OR_GREATER
-using System.Globalization;
-#endif
 
 namespace Parlot;
 
@@ -39,9 +36,14 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
         }
 
         // A single ASCII char is a shared string, like the empty span, and the whole buffer is the buffer itself
-        if (Length == 1 && (uint)Offset < (uint)buffer.Length && buffer[Offset] < 128)
+        if (Length == 1 && (uint)Offset < (uint)buffer.Length)
         {
-            return StringPool.Ascii(buffer[Offset]);
+            var c = buffer[Offset];
+
+            if (c < 128)
+            {
+                return StringPool.Ascii(c);
+            }
         }
 
         return buffer.Substring(Offset, Length);
@@ -80,7 +82,7 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
         // downlevel bodies of both would have to allocate the string anyway -- which is what the
         // #else already does, directly and without the indirection.
 #if NET8_0_OR_GREATER
-        return CultureInfo.InvariantCulture.CompareInfo.GetHashCode(Span, CompareOptions.Ordinal);
+        return string.GetHashCode(Span);
 #else
         return (ToString() ?? "").GetHashCode();
 #endif

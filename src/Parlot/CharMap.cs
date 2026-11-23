@@ -28,16 +28,7 @@ internal sealed class CharMap<T> where T : class
 
     public CharMap(IEnumerable<KeyValuePair<char, T>> map)
     {
-        var charSet = new HashSet<char>();
-
-        foreach (var item in map)
-        {
-            charSet.Add(item.Key);
-        }
-
-        ExpectedChars = [.. charSet];
-        Array.Sort(ExpectedChars);
-
+        List<char>? expectedChars = null;
         Dictionary<uint, T>? nonAsciiMap = null;
 
         foreach (var item in map)
@@ -45,7 +36,11 @@ internal sealed class CharMap<T> where T : class
             var c = item.Key;
             if (c < 128)
             {
-                _asciiMap[c] ??= item.Value;
+                if (_asciiMap[c] is null)
+                {
+                    _asciiMap[c] = item.Value;
+                    (expectedChars ??= []).Add(c);
+                }
             }
             else
             {
@@ -54,8 +49,19 @@ internal sealed class CharMap<T> where T : class
                 if (!nonAsciiMap.ContainsKey(c))
                 {
                     nonAsciiMap[c] = item.Value;
+                    (expectedChars ??= []).Add(c);
                 }
             }
+        }
+
+        if (expectedChars is not null)
+        {
+            ExpectedChars = expectedChars.ToArray();
+            Array.Sort(ExpectedChars);
+        }
+        else
+        {
+            ExpectedChars = Array.Empty<char>();
         }
 
         if (nonAsciiMap != null)
@@ -112,12 +118,16 @@ internal sealed class CharMap<T> where T : class
             {
                 return asciiMap[c];
             }
-            else
-            {
-                T? map = null;
-                _nonAsciiMap?.TryGetValue(c, out map);
-                return map ?? NonAsciiFallback;
-            }
+
+            return GetNonAscii(c);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private T? GetNonAscii(uint c)
+    {
+        T? map = null;
+        _nonAsciiMap?.TryGetValue(c, out map);
+        return map ?? NonAsciiFallback;
     }
 }

@@ -12,7 +12,14 @@ internal interface IWithoutValueParser
     bool ParseWithoutValue(ParseContext context, out int start, out int end);
 }
 
-public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser
+internal interface IValuelessParser
+{
+    bool ParseWithoutValue(ParseContext context);
+
+    Type ValueType { get; }
+}
+
+public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser, IValuelessParser
 {
     public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
 
@@ -55,6 +62,13 @@ public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser
         return success;
     }
 
+    bool IValuelessParser.ParseWithoutValue(ParseContext context)
+    {
+        var result = new ParseResult<T>();
+        return CanParseWithoutValue ? ParseWithoutValue(context, ref result) : Parse(context, ref result);
+    }
+
+    Type IValuelessParser.ValueType => typeof(T);
     /// <summary>
     /// Attempts to parse the input and returns whether the parse was successful.
     /// This is the covariant version of Parse for use with the IParser&lt;out T&gt; interface.
@@ -255,12 +269,12 @@ public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser
     /// <summary>
     /// Builds a parser that ensures the specified parser matches at the current position without consuming input (positive lookahead).
     /// </summary>
-    public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead.Then<object>(value: null!));
+    public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead ?? throw new ArgumentNullException(nameof(lookahead)));
 
     /// <summary>
     /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input (negative lookahead).
     /// </summary>
-    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(value: null!));
+    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead ?? throw new ArgumentNullException(nameof(lookahead)));
 
     /// <summary>
     /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input
@@ -269,7 +283,7 @@ public abstract partial class Parser<T> : IParser<T>, IWithoutValueParser
     /// </summary>
     /// <param name="lookahead">The parser which must not match.</param>
     /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
-    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead, object reason) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(value: null!), reason);
+    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead, object reason) => new WhenNotFollowedBy<T>(this, lookahead ?? throw new ArgumentNullException(nameof(lookahead)), reason);
 
     /// <summary>
     /// Builds a parser that selects a target parser based on the previous result.

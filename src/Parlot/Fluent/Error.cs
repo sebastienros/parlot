@@ -10,11 +10,13 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+    private readonly bool _withoutValue;
 
     public ElseError(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
@@ -23,7 +25,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
     {
         if (context.IsCompacting)
         {
-            return ParseCompacting(context, ref result);
+            return ParseCompacting(context, ref result, withValue: true);
         }
 
         context.EnterParser(this);
@@ -45,7 +47,35 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
         return true;
     }
 
-    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result, withValue: false);
+        }
+
+        context.EnterParser(this);
+
+        if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result)))
+        {
+            context.ExitParser(this);
+
+            if (context.CollectDiagnostics)
+            {
+                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
+                return false;
+            }
+
+            throw new ParseException(_message, context.Scanner.Cursor.Position);
+        }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result, bool withValue)
     {
         context.EnterParser(this);
 
@@ -54,7 +84,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
         var cursor = context.Scanner.Cursor;
         var start = cursor.Position;
 
-        if (!_parser.Parse(context, ref result))
+        if (!(withValue || !_withoutValue ? _parser.Parse(context, ref result) : _parser.ParseWithoutValue(context, ref result)))
         {
             context.ExitParser(this);
 
@@ -148,6 +178,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+    private readonly bool _withoutValue;
 
     // The error is only raised when the parser matches, so it can't be raised for a char it doesn't start with. The hints
     // are read when they are asked for since the parser can be a Deferred set later.
@@ -168,6 +199,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -179,7 +211,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
-        => ErrorSource.ParseError(this, _parser, _message, context);
+        => ErrorSource.ParseError(this, _parser, _withoutValue, _message, context);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
         => ErrorSource.GenerateErrorSource(_parser, typeof(T), typeof(T), _message, context);
@@ -191,6 +223,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+    private readonly bool _withoutValue;
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
@@ -207,6 +240,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -218,7 +252,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
-        => ErrorSource.ParseError(this, _parser, _message, context);
+        => ErrorSource.ParseError(this, _parser, _withoutValue, _message, context);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
         => ErrorSource.GenerateErrorSource(_parser, typeof(T), typeof(U), _message, context);
@@ -228,14 +262,14 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
 
 internal static class ErrorSource
 {
-    internal static bool ParseError<TInner, TResult>(Parser<TResult> owner, Parser<TInner> inner, string message, ParseContext context)
+    internal static bool ParseError<TInner, TResult>(Parser<TResult> owner, Parser<TInner> inner, bool withoutValue, string message, ParseContext context)
     {
         context.EnterParser(owner);
 
         var parsed = new ParseResult<TInner>();
         var start = context.Scanner.Cursor.Offset;
 
-        if (inner.CanParseWithoutValue ? inner.ParseWithoutValue(context, ref parsed) : inner.Parse(context, ref parsed))
+        if (withoutValue ? inner.ParseWithoutValue(context, ref parsed) : inner.Parse(context, ref parsed))
         {
             context.ExitParser(owner);
 

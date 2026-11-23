@@ -204,6 +204,37 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         return false;
     }
 
+    internal override bool CanParseWithoutValue => !_returnText;
+
+    // Parse, without looking up or allocating the matched casing in _cases
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<string> result)
+    {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        if (cursor.Match(Text.AsSpan(), _comparisonType))
+        {
+            var start = cursor.Offset;
+
+            cursor.AdvanceNoNewLines(Text.Length);
+
+            result.Start = start;
+            result.End = cursor.Offset;
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

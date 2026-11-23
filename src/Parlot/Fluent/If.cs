@@ -15,6 +15,8 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
     private readonly Func<bool>? _condition;
     private readonly Parser<T> _thenParser;
     private readonly Parser<T>? _elseParser;
+    private readonly bool _thenWithoutValue;
+    private readonly bool _elseWithoutValue;
 
     // The hints of the branches, read when they are asked for since they can be Deferred parsers set later
     private ForwardedHints? _hints;
@@ -47,6 +49,7 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
     {
         _contextCondition = condition ?? throw new ArgumentNullException(nameof(condition));
         _thenParser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _thenWithoutValue = _thenParser.CanParseWithoutValue;
     }
 
     /// <summary>
@@ -58,6 +61,7 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
     {
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
         _thenParser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _thenWithoutValue = _thenParser.CanParseWithoutValue;
     }
 
     /// <summary>
@@ -71,6 +75,8 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
         _contextCondition = condition ?? throw new ArgumentNullException(nameof(condition));
         _thenParser = thenParser ?? throw new ArgumentNullException(nameof(thenParser));
         _elseParser = elseParser ?? throw new ArgumentNullException(nameof(elseParser));
+        _thenWithoutValue = _thenParser.CanParseWithoutValue;
+        _elseWithoutValue = _elseParser.CanParseWithoutValue;
     }
 
     /// <summary>
@@ -84,6 +90,8 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
         _thenParser = thenParser ?? throw new ArgumentNullException(nameof(thenParser));
         _elseParser = elseParser ?? throw new ArgumentNullException(nameof(elseParser));
+        _thenWithoutValue = _thenParser.CanParseWithoutValue;
+        _elseWithoutValue = _elseParser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -104,17 +112,25 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
 
         var condition = _condition is not null ? _condition() : _contextCondition!((C)context);
         var parser = condition ? _thenParser : _elseParser;
-        var parsed = new ParseResult<T>();
-
-        if (parser is not null && parser.Parse(context, ref parsed))
-        {
-            result.Set(parsed.Start, parsed.End, parsed.Value);
-            context.ExitParser(this);
-            return true;
-        }
+        var success = parser is not null && parser.Parse(context, ref result);
 
         context.ExitParser(this);
-        return false;
+        return success;
+    }
+
+    internal override bool CanParseWithoutValue => _thenWithoutValue || _elseWithoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var condition = _condition is not null ? _condition() : _contextCondition!((C)context);
+        var success = condition
+            ? (_thenWithoutValue ? _thenParser.ParseWithoutValue(context, ref result) : _thenParser.Parse(context, ref result))
+            : _elseParser is not null && (_elseWithoutValue ? _elseParser.ParseWithoutValue(context, ref result) : _elseParser.Parse(context, ref result));
+
+        context.ExitParser(this);
+        return success;
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)

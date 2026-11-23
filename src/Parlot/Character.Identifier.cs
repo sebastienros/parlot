@@ -48,7 +48,7 @@ public static partial class Character
 
         var pos = IsInAsciiMask(span[0], startLow, startHigh)
             ? 1
-            : ReadIdentifierChar(span, 0, startLow, startHigh, isStart, options, ref hitEnd);
+            : ReadIdentifierChar(span, 0, isStart, options, ref hitEnd);
 
         if (pos == 0)
         {
@@ -72,7 +72,7 @@ public static partial class Character
                 break;
             }
 
-            var length = ReadIdentifierChar(span, pos, partLow, partHigh, isPart, options, ref hitEnd);
+            var length = ReadIdentifierChar(span, pos, isPart, options, ref hitEnd);
 
             if (length == 0)
             {
@@ -126,7 +126,7 @@ public static partial class Character
 
     // Reads the identifier char at index, which the masks don't accept, returning its length or 0 when it isn't one
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static int ReadIdentifierChar(ReadOnlySpan<char> span, int index, ulong low, ulong high, Func<int, bool> predicate, IdentifierOptions options, ref bool hitEnd)
+    private static int ReadIdentifierChar(ReadOnlySpan<char> span, int index, Func<int, bool> predicate, IdentifierOptions options, ref bool hitEnd)
     {
         var c = span[index];
 
@@ -134,7 +134,7 @@ public static partial class Character
         {
             return c == '\\' && (options & IdentifierEscapes) != 0
                 ? ReadIdentifierEscape(span, index, predicate, options, ref hitEnd)
-                : IsInAsciiMask(c, low, high) ? 1 : 0;
+                : 0;
         }
 
         if ((options & IdentifierOptions.SurrogatePairs) != 0 && char.IsSurrogate(c))

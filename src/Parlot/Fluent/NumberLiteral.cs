@@ -20,12 +20,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
     // A NumberFormatInfo is stored instead of a CultureInfo since NumberFormatInfo.GetInstance()
     // returns it directly, while a CultureInfo needs to be resolved on every call.
     private readonly NumberFormatInfo _culture = CultureInfo.InvariantCulture.NumberFormat;
-    private readonly bool _allowLeadingSign;
-    private readonly bool _allowDecimalSeparator;
-    private readonly bool _allowGroupSeparator;
-    private readonly bool _allowExponent;
+    private readonly NumberOptions _numberOptions;
     private readonly bool _allowUnderscore;
-    private readonly bool _requireFractionalPartForDecimals;
 
     public bool CanSeek { get; } = true;
 
@@ -37,6 +33,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
     {
         _decimalSeparator = decimalSeparator;
         _groupSeparator = groupSeparator;
+        _numberOptions = numberOptions;
         _numberStyles = numberOptions.ToNumberStyles();
 
         if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
@@ -47,21 +44,18 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
             _culture.NumberGroupSeparator = groupSeparator.ToString();
         }
 
-        _allowLeadingSign = (numberOptions & NumberOptions.AllowLeadingSign) != 0;
-        _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
-        _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
-        _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+        var allowLeadingSign = (numberOptions & NumberOptions.AllowLeadingSign) != 0;
+        var allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
         _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
-        _requireFractionalPartForDecimals = (numberOptions & NumberOptions.RequireFractionalPartForDecimals) != 0;
 
         ExpectedChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-        if (_allowLeadingSign)
+        if (allowLeadingSign)
         {
             ExpectedChars = [.. ExpectedChars, '+', '-'];
         }
 
-        if (_allowDecimalSeparator)
+        if (allowDecimalSeparator)
         {
             ExpectedChars = [.. ExpectedChars, decimalSeparator];
         }
@@ -88,7 +82,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var reset = context.Scanner.Cursor.Offset;
         var start = reset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_numberOptions, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
 
@@ -131,18 +125,12 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
 
         result.Body.Add($"var {resetName} = {cursorName}.Offset;");
 
-        var allowLeadingSign = _allowLeadingSign ? "true" : "false";
-        var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
-        var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
-        var allowExponent = _allowExponent ? "true" : "false";
-
         var (tryParseMethod, numberStylesExpr, cultureExpr, downlevel) = GetParseExpressions(context);
 
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        var allowUnderscore = _allowUnderscore ? "true" : "false";
-        var requireFractionalPartForDecimals = _requireFractionalPartForDecimals ? "true" : "false";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}, {requireFractionalPartForDecimals}, out var {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        var numberOptionsExpr = $"(global::Parlot.Fluent.NumberOptions){(int)_numberOptions}";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({numberOptionsExpr}, out var {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (_allowUnderscore)
         {
@@ -170,8 +158,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var (tryParseMethod, numberStylesExpr, cultureExpr, _) = GetParseExpressions(writer.Context);
 
         NumberSource.GenerateSpanSource(writer, valueVariable, fail, typeof(T), tryParseMethod, numberStylesExpr, cultureExpr,
-            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals,
-            _decimalSeparator, _groupSeparator);
+            _numberOptions, _decimalSeparator, _groupSeparator);
     }
 
     private (SourceGenerationContext Context, string TryParseMethod, string NumberStylesExpr, string CultureExpr, bool Downlevel)? _parseExpressions;

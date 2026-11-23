@@ -32,7 +32,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISeekablePrefixes, I
 
         for (var i = 0; i < _operators.Length; i++)
         {
-            choices[i] = new OperatorIndex<TInput>(_operators[i].Op ?? throw new ArgumentException("Operators must not contain null parsers.", nameof(operators)), i);
+            choices[i] = OperatorIndex<TInput>.Wrap(_operators[i].Op ?? throw new ArgumentException("Operators must not contain null parsers.", nameof(operators)), i);
         }
 
         _choice = new OneOf<int>(choices);
@@ -231,7 +231,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISeekable
 
         for (var i = 0; i < _operators.Length; i++)
         {
-            choices[i] = new OperatorIndex<TInput>(_operators[i].Op ?? throw new ArgumentException("Operators must not contain null parsers.", nameof(operators)), i);
+            choices[i] = OperatorIndex<TInput>.Wrap(_operators[i].Op ?? throw new ArgumentException("Operators must not contain null parsers.", nameof(operators)), i);
         }
 
         _choice = new OneOf<int>(choices);

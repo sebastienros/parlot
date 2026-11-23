@@ -21,10 +21,24 @@ internal sealed class IndexedOperator<T> : Parser<(int Index, T Value)>, ISeekab
     }
 
     /// <summary>
+    /// Wraps <paramref name="parser"/> with its index, hoisting a top-level <see cref="SkipWhiteSpace{T}"/> outside
+    /// so <see cref="OneOf{T}"/> can strip it when hoisting whitespace for a choice of operators.
+    /// </summary>
+    internal static Parser<(int Index, T Value)> Wrap(Parser<T> parser, int index)
+    {
+        if (parser is SkipWhiteSpace<T> skip)
+        {
+            return new SkipWhiteSpace<(int Index, T Value)>(new IndexedOperator<T>(skip.Parser, index)) { Name = skip.Name };
+        }
+
+        return new IndexedOperator<T>(parser, index);
+    }
+
+    /// <summary>
     /// Creates the choice of a level of operators whose factories receive their values, which returns the index of the
     /// operator that matched and its value, with the parser and the factory of each operator.
     /// </summary>
-    internal static Parser<(int Index, T Value)> CreateChoice<TFactory>((Parser<T> Op, TFactory Factory)[] operators, string parameterName, out TFactory[] factories, out IndexedOperator<T>[] parsers)
+    internal static Parser<(int Index, T Value)> CreateChoice<TFactory>((Parser<T> Op, TFactory Factory)[] operators, string parameterName, out TFactory[] factories, out Parser<(int Index, T Value)>[] parsers)
         where TFactory : Delegate
     {
         if (operators is null)
@@ -37,13 +51,13 @@ internal sealed class IndexedOperator<T> : Parser<(int Index, T Value)>, ISeekab
             throw new ArgumentException("At least one operator must be provided.", parameterName);
         }
 
-        parsers = new IndexedOperator<T>[operators.Length];
+        parsers = new Parser<(int Index, T Value)>[operators.Length];
         factories = new TFactory[operators.Length];
 
         for (var i = 0; i < operators.Length; i++)
         {
             var (op, factory) = operators[i];
-            parsers[i] = new IndexedOperator<T>(op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName), i);
+            parsers[i] = Wrap(op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName), i);
             factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
         }
 

@@ -1,4 +1,7 @@
 using System;
+#if !NET8_0_OR_GREATER
+using System.Runtime.CompilerServices;
+#endif
 
 namespace Parlot;
 
@@ -19,11 +22,13 @@ internal enum CharacterMask : byte
 #if !NET8_0_OR_GREATER
 public static partial class Character
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsIdentifierStart(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.IdentifierStart) != 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsIdentifierPart(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.IdentifierPart) != 0;

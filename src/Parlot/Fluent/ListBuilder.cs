@@ -93,14 +93,12 @@ internal struct ListBuilder<T>
             // The inline items move to the stack, the builder doesn't keep references to them
             _scratch = scratch = ListScratch<T>.Current;
             _start = scratch.Count;
-            scratch.Push(_item0);
-            scratch.Push(_item1);
-            scratch.Push(_item2);
-            scratch.Push(_item3);
+            scratch.Push5(_item0, _item1, _item2, _item3, item);
             _item0 = default!;
             _item1 = default!;
             _item2 = default!;
             _item3 = default!;
+            return;
         }
 
         Debug.Assert(scratch.Count == _start + _count, "A nested list didn't release the scratch stack.");
@@ -214,23 +212,56 @@ internal sealed class ListScratch<T>
         }
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void PushWithResize(T item)
+    internal void Push5(T item0, T item1, T item2, T item3, T item4)
     {
         var items = Items;
         var count = Count;
+
+        if (count + 5 > items.Length)
+        {
+            items = Grow(count + 5);
+        }
+
+        items[count] = item0;
+        items[count + 1] = item1;
+        items[count + 2] = item2;
+        items[count + 3] = item3;
+        items[count + 4] = item4;
+        Count = count + 5;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void PushWithResize(T item)
+    {
+        var count = Count;
+        var grown = Grow(count + 1);
+        grown[count] = item;
+        Count = count + 1;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private T[] Grow(int minCapacity)
+    {
+        var items = Items;
+        var count = Count;
+        var newCapacity = items.Length * 2;
+        if (newCapacity < minCapacity)
+        {
+            newCapacity = minCapacity;
+        }
+
         T[] grown;
 
-        if (items.Length < MaxRetainedCapacity)
+        if (items.Length < MaxRetainedCapacity && newCapacity <= MaxRetainedCapacity)
         {
             // Smaller arrays are always the retained one, which is replaced
-            grown = new T[Math.Min(items.Length * 2, MaxRetainedCapacity)];
+            grown = new T[Math.Min(newCapacity, MaxRetainedCapacity)];
             Array.Copy(items, grown, count);
             _retained = grown;
         }
         else
         {
-            grown = ArrayPool<T>.Shared.Rent(items.Length * 2);
+            grown = ArrayPool<T>.Shared.Rent(newCapacity);
             Array.Copy(items, grown, count);
 
             if (ClearReleasedItems)
@@ -244,9 +275,8 @@ internal sealed class ListScratch<T>
             }
         }
 
-        grown[count] = item;
         Items = grown;
-        Count = count + 1;
+        return grown;
     }
 
     /// <summary>
@@ -282,7 +312,24 @@ internal sealed class ListScratch<T>
     /// <summary>
     /// Removes the item at the top of the stack, which must not be empty.
     /// </summary>
-    public void Pop() => Release(Count - 1);
+    public void Pop()
+    {
+        var index = Count - 1;
+
+        Debug.Assert(index >= 0, "The stack was popped when empty.");
+
+        if (ClearReleasedItems)
+        {
+            Items[index] = default!;
+        }
+
+        Count = index;
+
+        if (index == 0 && Items != _retained)
+        {
+            ReturnRented();
+        }
+    }
 
     /// <summary>
     /// Removes the items above <paramref name="start"/>.

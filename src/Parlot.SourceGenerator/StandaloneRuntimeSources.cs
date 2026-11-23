@@ -108,7 +108,6 @@ internal static class StandaloneRuntimeSources
         "Polyfills.Char.cs",
         "Polyfills.ArgumentNullException.cs",
         "Fluent.ParseContext.cs",
-        "Fluent.HybridList.cs",
         "Fluent.ListBuilder.cs",
         "Fluent.LongestMatch.cs",
         "Fluent.OperatorList.cs",
@@ -453,7 +452,7 @@ internal static class StandaloneRuntimeSources
                     or "ParseError" or "ParseDiagnostic" or "ParseDiagnosticSeverity" or "Character" or "CharacterMask" or "WhiteSpaceSet" or "Numbers" or "HexConverter" or "ThrowHelper" or "InterpolationScanner", 0) => true,
                 (false, "ParseResult" or "Option" or "Interpolation", 1) => true,
                 (true, "ParseContext" or "NumberOptions" or "StringEscapes" or "IdentifierOptions" or "StreamRefillSource" or "TextReaderRefillSource" or "OperatorList", 0) => true,
-                (true, "Parser" or "HybridList" or "ListBuilder" or "ListScratch" or "DelegateParser" or "LongestMatch" or "LongestMatches", 1) => true,
+                (true, "Parser" or "ListBuilder" or "ListScratch" or "DelegateParser" or "LongestMatch" or "LongestMatches", 1) => true,
                 _ => false,
             };
         }

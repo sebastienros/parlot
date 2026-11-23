@@ -114,7 +114,8 @@ public class LeftAssociativeChoiceTests
     public void OperatorsShouldBeTriedAtTheSamePositionAsBefore(bool withContext)
     {
         var positions = new List<int>();
-        var op = Terms.Char('+');
+        var plus = Literals.Char('+');
+        var op = SkipWhiteSpace(plus);
         var minus = Terms.Char('-');
 
         Parser<decimal> parser = withContext
@@ -125,13 +126,18 @@ public class LeftAssociativeChoiceTests
                 (op, static (a, b) => a + b),
                 (minus, static (a, b) => a - b));
 
+        var skipEntries = 0;
         var context = new ParseContext(new Scanner(" 1 + 2 +3"))
         {
             OnEnterParser = (p, c) =>
             {
-                if (ReferenceEquals(p, op))
+                if (ReferenceEquals(p, plus))
                 {
                     positions.Add(c.Scanner.Cursor.Offset);
+                }
+                else if (ReferenceEquals(p, op))
+                {
+                    skipEntries++;
                 }
             },
         };
@@ -142,7 +148,8 @@ public class LeftAssociativeChoiceTests
         Assert.Equal(1, result.Start);
         Assert.Equal(9, result.End);
 
-        // The choice skipped the white space before trying the operator, and didn't try it at the end
+        // The choice hoisted and stripped SkipWhiteSpace before trying the operator, and didn't try it at the end
         Assert.Equal([3, 7], positions);
+        Assert.Equal(0, skipEntries);
     }
 }

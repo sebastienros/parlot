@@ -155,7 +155,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="false"/> if the frame only contains white space.</returns>
     private bool TryParseFrame(StreamingDriver driver, out T value)
     {
-        var context = driver.Context;
+        var context = driver.Context!;
         var cursor = context.Scanner.Cursor;
         var skipWhiteSpace = driver.Options.SkipWhiteSpace;
 

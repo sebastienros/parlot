@@ -181,6 +181,45 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         return true;
     }
 
+    internal override bool CanParseWithoutValue => _returnDecoded;
+
+    // Parse, without decoding escape sequences or building the TextSpan
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<TextSpan> result)
+    {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+
+        var quote = ExpectedChars[0];
+
+        if (_quotes == StringLiteralQuotes.SingleOrDouble && cursor.Current == '"')
+        {
+            quote = '"';
+        }
+
+        var read = _escapes == StringEscapes.Default
+            ? context.Scanner.ReadQuotedString(quote, out _, out _)
+            : context.Scanner.ReadQuotedString(quote, _escapes, out _, out _);
+
+        if (!read)
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        result.Start = start;
+        result.End = cursor.Offset;
+
+        context.ExitParser(this);
+        return true;
+    }
+
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

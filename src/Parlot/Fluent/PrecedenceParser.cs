@@ -954,8 +954,30 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             // a (op1) b (op2) c is applied as op1(a, op2(b, c)), so the following operators of the level are read first
             var end = right.End;
-            HybridList<(int Operator, T Operand)>? operations = null;
+            var value = right.Value;
 
+            if (next.Operator >= 0 && _operatorLevels[next.Operator] == level)
+            {
+                value = ApplyRightAssociativeChain(context, level, pin, value, ref end, ref next, ref lowest, ref lookup);
+            }
+
+            result.Set(result.Start, end, ApplyBinary(context, op, result.Value, value));
+        }
+
+        context.Unpin(pin);
+        return true;
+    }
+
+    // Reads the operations which follow the right operand of a right-associative level, and folds them into it.
+    // Kept out of Climb() so its ListBuilder try/finally doesn't grow the recursive climb's frame.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private T ApplyRightAssociativeChain(ParseContext context, int level, int pin, T value, ref int end, ref Lookahead next, ref int lowest, ref bool lookup)
+    {
+        var cursor = context.Scanner.Cursor;
+        var operations = new ListBuilder<(int Operator, T Operand)>();
+
+        try
+        {
             while (next.Operator >= 0 && _operatorLevels[next.Operator] == level)
             {
                 var operationPosition = next.Offset;
@@ -972,30 +994,31 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     break;
                 }
 
-                operations ??= [];
                 operations.Add((operation, operand.Value));
                 end = operand.End;
             }
 
-            var value = right.Value;
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            var count = operations.Count;
 
-            if (operations is not null)
+            if (count > 0)
             {
-                var accumulated = operations[operations.Count - 1].Operand;
+                var accumulated = operations[count - 1].Operand;
 
-                for (var i = operations.Count - 1; i > 0; i--)
+                for (var i = count - 1; i > 0; i--)
                 {
                     accumulated = ApplyBinary(context, operations[i].Operator, operations[i - 1].Operand, accumulated);
                 }
 
                 value = ApplyBinary(context, operations[0].Operator, value, accumulated);
             }
-
-            result.Set(result.Start, end, ApplyBinary(context, op, result.Value, value));
+        }
+        finally
+        {
+            operations.Release();
         }
 
-        context.Unpin(pin);
-        return true;
+        return value;
     }
 
     // The parts of the parser that the first operator of a valued prefix level reads, see ValuedPrefix.ParsePrefixed()
@@ -1599,7 +1622,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
-        result.Body.Add(GenerateClimb(climb, lookupName, resumedName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, prefixStarts));
+        result.Body.Add(GenerateClimb(climb, lookupName, resumedName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, prefixStarts, chains));
 
         foreach (var chain in chains)
         {
@@ -1629,7 +1652,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
     // The climb of the levels up to maxLevel. Without operators that can follow an operand, it parses the prefix operators
     // and the operand only, and the lookup isn't generated.
-    private string GenerateClimb(string climb, string lookup, string resumed, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, string?[] prefixStarts)
+    private string GenerateClimb(string climb, string lookup, string resumed, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, string?[] prefixStarts, List<string> chains)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -1825,38 +1848,18 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             if (kind == OperatorKind.RightAssociative)
             {
-                var listType = $"global::Parlot.Fluent.HybridList<(int, {valueType})>";
+                var chainName = $"rightChain{id}_{levelText}";
+                var pinArg = compacting ? ", pin" : "";
 
-                Line($"                {listType}? operations = null;");
-                Line($"                while (next >= 0 && {levelsField}[next] == {levelText})");
+                // The chain uses a ListBuilder: keeping its try/finally out of climb() avoids growing climb's frame
+                Line($"                if (next >= 0 && {levelsField}[next] == {levelText} && {chainName}(ref right, ref next, ref nextPosition{pinArg}))");
                 Line("                {");
-                Line("                    var operation = next;");
-                Line("                    var operationPosition = nextPosition;");
-
-                if (compacting)
-                {
-                    Line($"                    {ctx}.MovePin(pin, operationPosition);");
-                }
-
-                Line($"                    if (!{climb}({(level - 1).ToString(CultureInfo.InvariantCulture)}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
-                Line("                    {");
-                Line($"                        {cursor}.ResetPosition(operationPosition);");
-                Line($"                        lowest = {nextLevelText};");
-                Line("                        lookup = true;");
-                Line("                        break;");
-                Line("                    }");
-                Line($"                    operations ??= new {listType}();");
-                Line("                    operations.Add((operation, operand));");
+                Line($"                    lowest = {nextLevelText};");
+                Line("                    lookup = true;");
                 Line("                }");
-                Line("                if (operations is not null)");
-                Line("                {");
-                Line("                    var accumulated = operations[operations.Count - 1].Item2;");
-                Line("                    for (var i = operations.Count - 1; i > 0; i--)");
-                Line("                    {");
-                Line($"                        accumulated = {Apply(level, "operations[i].Item1", "operations[i - 1].Item2", "accumulated")};");
-                Line("                    }");
-                Line($"                    right = {Apply(level, "operations[0].Item1", "right", "accumulated")};");
-                Line("                }");
+
+                var capturedLevel = level;
+                chains.Add(GenerateRightAssociativeChain(chainName, levelText, (level - 1).ToString(CultureInfo.InvariantCulture), climb, levelsField!, valueType, (opVar, leftVar, rightVar) => Apply(capturedLevel, opVar, leftVar, rightVar), ctx, cursor, compacting));
             }
 
             Line(Switch("                ", "op", OperatorsOf(level), op => $"climbed = {factories[op]}climbed, right);"));
@@ -1873,6 +1876,62 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         Line("    return true;");
+        sb.Append('}');
+
+        return sb.ToString();
+    }
+
+    // The local function reading the operations which follow the right operand of a right-associative level,
+    // and folding them into it. Kept out of climb() so its ListBuilder try/finally doesn't grow climb's frame.
+    private static string GenerateRightAssociativeChain(string name, string levelText, string tighterText, string climb, string levelsField, string valueType, Func<string, string, string, string> apply, string ctx, string cursor, bool compacting)
+    {
+        var elementType = $"(int, {valueType})";
+        var sb = new StringBuilder();
+
+        void Line(string text) => sb.Append(text).Append('\n');
+
+        Line($"bool {name}(ref {valueType} right, ref int next, ref int nextPosition{(compacting ? ", int pin" : "")})");
+        Line("{");
+        Line("    var stopped = false;");
+        Line($"    {ListBuilderSource.Declare("operations", elementType)}");
+        Line("    try");
+        Line("    {");
+        Line($"        while (next >= 0 && {levelsField}[next] == {levelText})");
+        Line("        {");
+        Line("            var operation = next;");
+        Line("            var operationPosition = nextPosition;");
+
+        if (compacting)
+        {
+            Line($"            {ctx}.MovePin(pin, operationPosition);");
+        }
+
+        Line($"            if (!{climb}({tighterText}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
+        Line("            {");
+        Line($"                {cursor}.ResetPosition(operationPosition);");
+        Line("                stopped = true;");
+        Line("                break;");
+        Line("            }");
+        Line("            operations.Add((operation, operand));");
+        Line("        }");
+
+        // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+        Line("        var count = operations.Count;");
+        Line("        if (count > 0)");
+        Line("        {");
+        Line("            var accumulated = operations[count - 1].Item2;");
+        Line("            for (var i = count - 1; i > 0; i--)");
+        Line("            {");
+        Line($"                accumulated = {apply("operations[i].Item1", "operations[i - 1].Item2", "accumulated")};");
+        Line("            }");
+        Line($"            right = {apply("operations[0].Item1", "right", "accumulated")};");
+        Line("        }");
+        Line("    }");
+        Line("    finally");
+        Line("    {");
+        Line("        operations.Release();");
+        Line("    }");
+        Line("    return stopped;");
         sb.Append('}');
 
         return sb.ToString();

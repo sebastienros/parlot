@@ -137,21 +137,24 @@ public static partial class Numbers
         var limit = RadixLimits<TNumber>.Limits[radix];
         var lastDigit = RadixLimits<TNumber>.LastDigits[radix];
         var bounded = RadixLimits<TNumber>.Bounded;
+        var parsed = TNumber.Zero;
+        var i = 0;
 
-        while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+        for (; i < span.Length && TryGetDigit(span[i], radix, out var digit); i++)
         {
-            if (bounded && (value > limit || (value == limit && digit > lastDigit)))
+            if (bounded && parsed >= limit && (parsed > limit || digit > lastDigit))
             {
                 value = default;
                 charsRead = 0;
                 return false;
             }
 
-            value = (value * radixValue) + TNumber.CreateTruncating(digit);
-            charsRead++;
+            parsed = (parsed * radixValue) + TNumber.CreateTruncating(digit);
         }
 
-        return charsRead > 0;
+        value = parsed;
+        charsRead = i;
+        return i > 0;
     }
 
     /// <summary>
@@ -283,44 +286,92 @@ public static partial class Numbers
 // INumber<T> arrived in .NET 7; net472 and netstandard2.0 lack the type entirely,
 // so this whole generic lane is modern-only and cannot be polyfilled.
 #if NET8_0_OR_GREATER && !PARLOT_NO_GENERIC_MATH
-        /// <summary>
-        /// Parses a number, using a fast path for plain sequences of digits.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryParseNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
-                where TNumber : INumber<TNumber>
+    /// <summary>
+    /// Parses a number, using a fast path for plain sequences of digits.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryParseNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
+        where TNumber : INumber<TNumber>
+    {
+        // The digits are only decimal ones without a hex or binary style
+        if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && unchecked((uint)(span.Length - 1)) < MaxFastDigits)
         {
-                // The digits are only decimal ones without a hex or binary style
-                if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && unchecked((uint)(span.Length - 1)) < MaxFastDigits)
+            long parsed = 0;
+
+            foreach (var c in span)
+            {
+                var digit = unchecked((uint)(c - '0'));
+
+                if (digit > 9)
                 {
-                        long parsed = 0;
+                    if (c == '-' && (styles & NumberStyles.AllowLeadingSign) != 0 && span[0] == '-')
+                    {
+                        return TryParseNegativeNumber(span, styles, provider, out value);
+                    }
 
-                        foreach (var c in span)
-                        {
-                                var digit = unchecked((uint)(c - '0'));
-
-                                if (digit > 9)
-                                {
-                                        return TNumber.TryParse(span, styles, provider, out value);
-                                }
-
-                                parsed = (parsed * 10) + digit;
-                        }
-
-                        value = TNumber.CreateTruncating(parsed);
-
-                        // A narrower number type can wrap during conversion, so only keep exact values.
-                        if (long.CreateTruncating(value) == parsed)
-                        {
-                                return true;
-                        }
+                    return TNumber.TryParse(span, styles, provider, out value);
                 }
 
-                return TNumber.TryParse(span, styles, provider, out value);
+                parsed = (parsed * 10) + digit;
+            }
+
+            value = TNumber.CreateTruncating(parsed);
+
+            // A narrower number type can wrap during conversion, so only keep exact values.
+            if (long.CreateTruncating(value) == parsed)
+            {
+                return true;
+            }
         }
 
-        // long.MaxValue has 19 digits, so every number with at most 18 digits fits.
-        private const int MaxFastDigits = 18;
+        return TNumber.TryParse(span, styles, provider, out value);
+    }
+
+    private static bool TryParseNegativeNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
+        where TNumber : INumber<TNumber>
+    {
+        if (HasStandardNegativeSign(provider) && span.Length > 1)
+        {
+            var digits = span.Slice(1);
+            long parsed = 0;
+
+            foreach (var c in digits)
+            {
+                var digit = unchecked((uint)(c - '0'));
+
+                if (digit > 9)
+                {
+                    return TNumber.TryParse(span, styles, provider, out value);
+                }
+
+                parsed = (parsed * 10) + digit;
+            }
+
+            // Let TNumber.TryParse handle "-0" (e.g. negative zero for floats, unsigned types)
+            if (parsed != 0)
+            {
+                parsed = -parsed;
+                value = TNumber.CreateTruncating(parsed);
+
+                // A narrower or unsigned number type can wrap during conversion, so only keep exact negative values.
+                if (TNumber.IsNegative(value) && long.CreateTruncating(value) == parsed)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return TNumber.TryParse(span, styles, provider, out value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool HasStandardNegativeSign(IFormatProvider? provider) =>
+        ReferenceEquals(provider, CultureInfo.InvariantCulture.NumberFormat)
+        || ReferenceEquals(provider, CultureInfo.InvariantCulture)
+        || NumberFormatInfo.GetInstance(provider).NegativeSign == "-";
+
+    // long.MaxValue has 19 digits, so every number with at most 18 digits fits.
+    private const int MaxFastDigits = 18;
 #endif
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -358,21 +409,26 @@ public static partial class Numbers
         }
 
         var unsignedRadix = (uint)radix;
+        var limit = maxValue / unsignedRadix;
+        var lastDigit = (int)(maxValue - (limit * unsignedRadix));
+        ulong parsed = 0;
+        var i = 0;
 
-        while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+        for (; i < span.Length && TryGetDigit(span[i], radix, out var digit); i++)
         {
-            if (value > (maxValue - (uint)digit) / unsignedRadix)
+            if (parsed >= limit && (parsed > limit || digit > lastDigit))
             {
                 value = default;
                 charsRead = 0;
                 return false;
             }
 
-            value = (value * unsignedRadix) + (uint)digit;
-            charsRead++;
+            parsed = (parsed * unsignedRadix) + (uint)digit;
         }
 
-        return charsRead > 0;
+        value = parsed;
+        charsRead = i;
+        return i > 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

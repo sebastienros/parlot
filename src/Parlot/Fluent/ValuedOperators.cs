@@ -121,14 +121,14 @@ internal sealed class ConditionalGroup<T, TMiddle> : PostfixGroup<T>
 
     public ConditionalGroup(Parser<(TMiddle, T)> op, Func<T, TMiddle, T, T> factory)
     {
-        _choice = new IndexedOperator<(TMiddle, T)>(op, 0);
+        _choice = IndexedOperator<(TMiddle, T)>.Wrap(op, 0);
         _factory = factory;
         Factories = [factory];
     }
 
     public ConditionalGroup(Parser<(TMiddle, T)> op, Func<ParseContext, T, TMiddle, T, T> factory)
     {
-        _choice = new IndexedOperator<(TMiddle, T)>(op, 0);
+        _choice = IndexedOperator<(TMiddle, T)>.Wrap(op, 0);
         _contextFactory = factory;
         Factories = [factory];
     }
@@ -294,7 +294,7 @@ internal abstract class ValuedPrefix<T>
 internal sealed class ValuedPrefix<T, TOperator> : ValuedPrefix<T>
 {
     private readonly Parser<(int Index, TOperator Value)> _choice;
-    private readonly IndexedOperator<TOperator>[] _operators;
+    private readonly Parser<(int Index, TOperator Value)>[] _operators;
     private readonly Func<T, TOperator, T>[]? _factories;
     private readonly Func<ParseContext, T, TOperator, T>[]? _contextFactories;
 

@@ -65,21 +65,52 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoop
             else
             {
                 var extraPart = _extraPart;
-                var size = 1;
+                int size;
 
-                while (size < span.Length)
+                if (extraPart == null)
                 {
-                    var c = span[size];
+#if NET8_0_OR_GREATER
+                    // Short identifiers (the common case) avoid SearchValues setup overhead
+                    var tableLength = Math.Min(span.Length, 16);
+                    size = 1;
 
-                    if (!Character.IsIdentifierPart(c) && (extraPart == null || !extraPart(c)))
+                    while (size < tableLength && Character.IsIdentifierPart(span[size]))
                     {
-                        break;
+                        size++;
                     }
 
-                    size++;
+                    if (size == tableLength && size < span.Length)
+                    {
+                        var index = span.Slice(size).IndexOfAnyExcept(Character._identifierPart);
+                        size = index == -1 ? span.Length : size + index;
+                    }
+#else
+                    size = 1;
+
+                    while (size < span.Length && Character.IsIdentifierPart(span[size]))
+                    {
+                        size++;
+                    }
+#endif
+                }
+                else
+                {
+                    size = 1;
+
+                    while (size < span.Length)
+                    {
+                        var c = span[size];
+
+                        if (!Character.IsIdentifierPart(c) && !extraPart(c))
+                        {
+                            break;
+                        }
+
+                        size++;
+                    }
                 }
 
-                cursor.AdvanceNoNewLines(size);
+                cursor.AdvanceWithinBuffer(size);
             }
 
             var end = cursor.Offset;

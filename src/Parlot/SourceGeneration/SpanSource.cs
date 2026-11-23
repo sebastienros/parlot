@@ -646,12 +646,7 @@ internal static class NumberSource
         string tryParseMethod,
         string numberStyles,
         string culture,
-        bool allowLeadingSign,
-        bool allowDecimalSeparator,
-        bool allowGroupSeparator,
-        bool allowExponent,
-        bool allowUnderscore,
-        bool requireFractionalPartForDecimals,
+        Fluent.NumberOptions numberOptions,
         char decimalSeparator,
         char groupSeparator)
     {
@@ -660,17 +655,15 @@ internal static class NumberSource
         var reachedEnd = writer.DeclareLocal("bool", "numberReachedEnd", "false");
         var number = writer.DeclareLocal(valueType, "number");
 
-        static string Bool(bool value) => value ? "true" : "false";
-
         writer.Add($"{text} = {writer.Span}.Slice({writer.Pos});");
-        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, {Bool(allowUnderscore)}, {Bool(requireFractionalPartForDecimals)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
+        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, (global::Parlot.Fluent.NumberOptions){(int)numberOptions}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
 
         // More digits could follow the end of the span
         writer.Add($"if ({reachedEnd}) {writer.MarkHitEnd}");
 
         // The value is parsed even when it's not used, since a number its type can't represent doesn't match: it fails
         // after its digits, which the parser moves the cursor back from
-        var digits = allowUnderscore
+        var digits = (numberOptions & Fluent.NumberOptions.AllowUnderscore) != 0
             ? $"global::Parlot.Numbers.RemoveUnderscores({text}.Slice(0, {length}))"
             : $"{text}.Slice(0, {length})";
         writer.Add($"if ({length} == 0) {fail.Goto()}");

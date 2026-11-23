@@ -13,6 +13,7 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
     private readonly Parser<T> _previousParser;
     private readonly Parser<U>[] _parsers;
     private readonly Func<ParseContext, T, int> _selector;
+    private readonly bool _withoutValue;
 
     public Switch(Parser<T> previousParser, Func<ParseContext, T, int> selector, params Parser<U>[] parsers)
     {
@@ -26,7 +27,9 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
 
         for (var i = 0; i < _parsers.Length; i++)
         {
-            _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+            var parser = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+            _parsers[i] = parser;
+            _withoutValue |= parser.CanParseWithoutValue;
         }
     }
 
@@ -87,12 +90,49 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
 
         var nextParser = _parsers[index];
 
-        var parsed = new ParseResult<U>();
-
-        if (nextParser.Parse(context, ref parsed))
+        if (nextParser.Parse(context, ref result))
         {
-            result.Set(parsed.Start, parsed.End, parsed.Value);
+            context.ExitParser(this);
+            return true;
+        }
 
+        // The previous parser matched, its text is read again by the next alternative
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<U> result)
+    {
+        context.EnterParser(this);
+
+        var previousResult = new ParseResult<T>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (!_previousParser.Parse(context, ref previousResult))
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        var index = _selector(context, previousResult.Value);
+
+        if ((uint)index >= (uint)_parsers.Length)
+        {
+            context.Scanner.Cursor.ResetPosition(start);
+
+            context.ExitParser(this);
+            return false;
+        }
+
+        var nextParser = _parsers[index];
+
+        if (nextParser.ParseWithoutValue(context, ref result))
+        {
             context.ExitParser(this);
             return true;
         }

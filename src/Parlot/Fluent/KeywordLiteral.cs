@@ -252,6 +252,54 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
         return false;
     }
 
+    internal override bool CanParseWithoutValue => !_returnText;
+
+    // Parse, without looking up or allocating the matched casing in _textLiteral.Cases
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<string> result)
+    {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+        var text = Text;
+
+        if (cursor.Match(text.AsSpan(), Comparison))
+        {
+            var length = text.Length;
+            var span = cursor.Span;
+
+            if (span.Length > length)
+            {
+                var next = span[length];
+
+                if (next < 128
+                    ? (((next < 64 ? _identifierPartLow : _identifierPartHigh) >> (next & 63)) & 1UL) != 0
+                    : _identifierPartNonAscii != null && IsNonAsciiIdentifierPart(next))
+                {
+                    context.ExitParser(this);
+                    return false;
+                }
+            }
+
+            var start = cursor.Offset;
+
+            cursor.AdvanceNoNewLines(length);
+
+            result.Start = start;
+            result.End = start + length;
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

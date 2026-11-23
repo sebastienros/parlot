@@ -252,7 +252,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             }
 
             context.EnterParser(this);
-            return ParseWithOptions(context, ref result);
+            return ParseWithOptions(context, ref result, withValue: true);
         }
 
         context.EnterParser(this);
@@ -343,14 +343,20 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return true;
     }
 
-    internal override bool CanParseWithoutValue => !_hasOptions || _last is not null;
+    internal override bool CanParseWithoutValue => true;
 
-    // The loop of Parse, without the list. The options keep a single implementation, the last element one for both.
+    // The loop of Parse, without the list.
     internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {
         if (_hasOptions)
         {
-            return _last is not null ? ParseWithLast(context, ref result, withValue: false) : Parse(context, ref result);
+            if (_last is not null)
+            {
+                return ParseWithLast(context, ref result, withValue: false);
+            }
+
+            context.EnterParser(this);
+            return ParseWithOptions(context, ref result, withValue: false);
         }
 
         context.EnterParser(this);
@@ -559,16 +565,37 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return true;
     }
 
-    private bool ParseWithOptions(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    private bool ParseWithOptions(ParseContext context, ref ParseResult<IReadOnlyList<T>> result, bool withValue)
+    {
+        if (!withValue)
+        {
+            var none = new ListBuilder<T>();
+            return ParseWithOptions(context, ref result, ref none, withValue: false);
+        }
+
+        var results = new ListBuilder<T>();
+
+        try
+        {
+            return ParseWithOptions(context, ref result, ref results, withValue: true);
+        }
+        finally
+        {
+            results.Release();
+        }
+    }
+
+    private bool ParseWithOptions(ParseContext context, ref ParseResult<IReadOnlyList<T>> result, ref ListBuilder<T> results, bool withValue)
     {
         var cursor = context.Scanner.Cursor;
         var initial = cursor.Offset;
         var parsed = new ParseResult<T>();
         var separatorResult = new ParseResult<U>();
+        var parserWithoutValue = !withValue && _withoutValue;
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin();
-        var found = _parser.Parse(context, ref parsed) && cursor.Offset != initial;
+        var found = (parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != initial;
 
         if (!found && _allowLeadingSeparator)
         {
@@ -581,7 +608,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                 }
 
                 var beforeValue = cursor.Offset;
-                if (_parser.Parse(context, ref parsed) && cursor.Offset != beforeValue)
+                if ((parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != beforeValue)
                 {
                     found = true;
                     break;
@@ -601,7 +628,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             context.ExitParser(this);
             if (_min == 0)
             {
-                result.Set(initial, initial, (IReadOnlyList<T>)[]);
+                if (withValue)
+                {
+                    result.Set(initial, initial, (IReadOnlyList<T>)[]);
+                }
+                else
+                {
+                    result.Start = initial;
+                    result.End = initial;
+                }
                 return true;
             }
             return false;
@@ -609,74 +644,82 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
         var start = parsed.Start;
         var end = cursor.Offset;
-        var results = new ListBuilder<T>();
-        results.Add(parsed.Value);
+        var count = 1;
+        if (withValue)
+        {
+            results.Add(parsed.Value);
+        }
         context.MovePin(pin);
 
-        try
+        while (_max == 0 || count < _max)
         {
-            while (_max == 0 || results.Count < _max)
+            if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
             {
-                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                break;
+            }
+
+            var foundNext = false;
+            while (true)
+            {
+                var beforeValue = cursor.Offset;
+                if ((parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != beforeValue)
+                {
+                    foundNext = true;
+                    break;
+                }
+
+                if (!_removeEmptyEntries)
                 {
                     break;
                 }
 
-                var foundNext = false;
-                while (true)
+                var beforeSeparator = cursor.Offset;
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                 {
-                    var beforeValue = cursor.Offset;
-                    if (_parser.Parse(context, ref parsed) && cursor.Offset != beforeValue)
-                    {
-                        foundNext = true;
-                        break;
-                    }
-
-                    if (!_removeEmptyEntries)
-                    {
-                        break;
-                    }
-
-                    var beforeSeparator = cursor.Offset;
-                    if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
-                    {
-                        break;
-                    }
-                }
-
-                if (!foundNext)
-                {
-                    if (_allowTrailingSeparator)
-                    {
-                        end = cursor.Offset;
-                    }
-                    else
-                    {
-                        cursor.ResetPosition(end);
-                    }
-
                     break;
                 }
+            }
 
-                end = cursor.Offset;
-                context.MovePin(pin);
+            if (!foundNext)
+            {
+                if (_allowTrailingSeparator)
+                {
+                    end = cursor.Offset;
+                }
+                else
+                {
+                    cursor.ResetPosition(end);
+                }
+
+                break;
+            }
+
+            end = cursor.Offset;
+            context.MovePin(pin);
+            count++;
+            if (withValue)
+            {
                 results.Add(parsed.Value);
             }
+        }
 
-            context.Unpin(pin);
+        context.Unpin(pin);
 
-            if (results.Count < _min)
-            {
-                cursor.ResetPosition(initial);
-                context.ExitParser(this);
-                return false;
-            }
+        if (count < _min)
+        {
+            cursor.ResetPosition(initial);
+            context.ExitParser(this);
+            return false;
+        }
 
+        if (withValue)
+        {
             result.Set(start, end, results.ToArray());
         }
-        finally
+        else
         {
-            results.Release();
+            result.Start = start;
+            result.End = end;
         }
 
         context.ExitParser(this);
