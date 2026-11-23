@@ -416,6 +416,7 @@ public class BenchmarksTests
     [Theory]
     [InlineData("Repeated")]
     [InlineData("Distinct")]
+    [InlineData("Long")]
     public void PooledStringGrammars(string scenario)
     {
         // The setup checks the pooled strings against ToString()

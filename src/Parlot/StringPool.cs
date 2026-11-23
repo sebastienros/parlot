@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace Parlot;
@@ -17,7 +18,8 @@ namespace Parlot;
 /// <para>
 /// The table uses open addressing. The first and the last 8 chars of a value, zero padded when it is shorter, are with
 /// its length an exact key for values of up to 16 chars, which are then found without reading the string. A longer
-/// value also compares the string.
+/// value also compares the string. The hash reads all the chars of a value, with keys random to each pool, so that
+/// values can't be crafted to collide without knowing them.
 /// </para>
 /// <para>
 /// The pool is bounded: it holds at most <see cref="MaxCount"/> values of at most its maximum length, a lookup probes a
@@ -51,6 +53,9 @@ internal sealed class StringPool
     // Once the pool is full, it switches off when this many lookups missed and they were more than half of them
     private const int MinMissesToSwitchOff = 1024;
 
+    // The values up to this length hash each 4 chars of their middle with a key of their own; longer ones reuse them
+    private const uint MaxMiddleLength = 256;
+
     // The strings of the ASCII chars, which are returned for the values of a single char without a lookup
     private static readonly string[] s_ascii = CreateAscii();
 
@@ -72,7 +77,14 @@ internal sealed class StringPool
         public string? Value;
     }
 
-    private readonly ulong _seed;
+    // The keys of the hash, random to the pool
+    private readonly ulong _key0;
+    private readonly ulong _key1;
+    private readonly ulong _key2;
+    private readonly ulong _key3;
+
+    // The keys of the chars between the first and the last 8 of a longer value, one per 4 chars
+    private readonly ulong[] _middleKeys;
     private readonly object _lock = new();
 
     private volatile Entry[] _entries = s_noEntries;
@@ -101,8 +113,20 @@ internal sealed class StringPool
         _maximumLength = maximumLength;
         ConfiguredMaximumLength = maximumLength;
 
-        // Each pool hashes differently, so that an input can't be crafted to collide in every process
-        _seed = ((ulong)(uint)RuntimeHelpers.GetHashCode(this) << 32 | (uint)Environment.TickCount) * 0x9E3779B97F4A7C15UL;
+        // Each pool hashes differently, so that an input can't be crafted to collide without knowing its keys
+        _key0 = Keys.Next();
+        _key1 = Keys.Next();
+        _key2 = Keys.Next();
+        _key3 = Keys.Next();
+
+        // Unsigned, as the lookups compare it: a negative length pools values of any length
+        var middleChars = (int)Math.Min((uint)maximumLength, MaxMiddleLength) - 16;
+        _middleKeys = new ulong[middleChars > 0 ? (middleChars + 3) / 4 : 0];
+
+        for (var i = 0; i < _middleKeys.Length; i++)
+        {
+            _middleKeys[i] = Keys.Next();
+        }
     }
 
     /// <summary>
@@ -173,7 +197,7 @@ internal sealed class StringPool
 
         var table = _entries;
         var mask = table.Length - 1;
-        var i = Slot(Hash(head0, head1, tail0, tail1, length), mask);
+        var i = Slot(Hash(value, head0, head1, tail0, tail1), mask);
 
         for (var probes = 0; probes < MaxProbes; probes++)
         {
@@ -242,7 +266,7 @@ internal sealed class StringPool
             }
 
             // Probe again: another thread may have added the value, or grown the table, in the meantime
-            var hash = Hash(head0, head1, tail0, tail1, length);
+            var hash = Hash(value, head0, head1, tail0, tail1);
             var i = 0;
             var found = false;
 
@@ -359,7 +383,7 @@ internal sealed class StringPool
             }
 
             // An entry beyond the probes of a lookup is not found, and its value is then created: the result is the same
-            var i = Slot(Hash(e.Head0, e.Head1, e.Tail0, e.Tail1, e.Length), mask);
+            var i = Slot(Hash(e.Value.AsSpan(), e.Head0, e.Head1, e.Tail0, e.Tail1), mask);
 
             while (table[i].Value != null)
             {
@@ -379,6 +403,13 @@ internal sealed class StringPool
 
         // Lookups still running may use the old table, which stays valid
         _entries = s_noEntries;
+    }
+
+    // The hash of a value, which the tests check
+    internal ulong HashOf(ReadOnlySpan<char> value)
+    {
+        Load(value, out var head0, out var head1, out var tail0, out var tail1);
+        return Hash(value, head0, head1, tail0, tail1);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -418,19 +449,61 @@ internal sealed class StringPool
         }
     }
 
-    // Each part is multiplied with the seed mixed in, so that values can't be made to collide without knowing it. The
-    // multiplications are independent, and the murmur3 finalizer makes each bit of the result depend on all of them.
+    // NH, the hash of UMAC: each word is cut in two halves of 32 bits, a key of the pool is added to each, and their
+    // product is computed on 64 bits, without losing a bit. Two different values have the same sum with a probability
+    // of at most 2^-32 over the keys, whatever the values are, and the products are independent. Multiplying each word
+    // by a constant instead, as this pool first did, leaves a difference in the high bits of a word in the high bits of
+    // its product, which the products of other words can cancel: values which differ only in the top bits of their 4th
+    // and 8th chars collided in every pool. A value of more than 16 chars also hashes its middle, which the entry doesn't
+    // keep: without it, values with the same first and last 8 chars would all collide. The murmur3 finalizer then makes
+    // the bits of the slot depend on all the bits of the sum.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ulong Hash(ulong head0, ulong head1, ulong tail0, ulong tail1, int length)
+    private ulong Hash(ReadOnlySpan<char> value, ulong head0, ulong head1, ulong tail0, ulong tail1)
     {
-        var seed = _seed;
-        var hash = ((head0 ^ seed) * 0x9E3779B97F4A7C15UL) ^ ((head1 ^ seed) * 0xC2B2AE3D27D4EB4FUL)
-            ^ ((tail0 ^ seed) * 0x165667B19E3779F9UL) ^ ((tail1 ^ seed) * 0x27D4EB2F165667C5UL) ^ (ulong)length;
+        var hash = Nh(head0, _key0) + Nh(head1, _key1) + Nh(tail0, _key2) + Nh(tail1, _key3) + (ulong)value.Length;
 
+        if (value.Length > 16)
+        {
+            hash += HashMiddle(value);
+        }
+
+        return Finalize(hash);
+    }
+
+    // Each 4 chars from the 9th to the last 8, the last ones overlapping these. Past the keys, the sum is finalized and
+    // the keys are used again, so that chars moved from one block to another don't give the same sum.
+    private ulong HashMiddle(ReadOnlySpan<char> value)
+    {
+        var bytes = MemoryMarshal.AsBytes(value);
+        var keys = _middleKeys;
+        var end = bytes.Length - 16;
+        var sum = 0UL;
+        var k = 0;
+
+        for (var offset = 16; offset < end; offset += 8)
+        {
+            if (k == keys.Length)
+            {
+                sum = Finalize(sum);
+                k = 0;
+            }
+
+            sum += Nh(MemoryMarshal.Read<ulong>(bytes.Slice(offset)), keys[k++]);
+        }
+
+        return sum;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong Finalize(ulong hash)
+    {
         hash = (hash ^ (hash >> 33)) * 0xFF51AFD7ED558CCDUL;
         hash = (hash ^ (hash >> 33)) * 0xC4CEB9FE1A85EC53UL;
         return hash ^ (hash >> 33);
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong Nh(ulong word, ulong key) => (ulong)((uint)word + (uint)key) * ((uint)(word >> 32) + (uint)(key >> 32));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Slot(ulong hash, int mask) => (int)hash & mask;
@@ -445,5 +518,36 @@ internal sealed class StringPool
         }
 
         return strings;
+    }
+
+    // The keys of the pools, in a type of their own so that the strings of the ASCII chars don't create the secret
+    private static class Keys
+    {
+        // 64 random bits drawn once per process, from which each pool derives its own keys
+        private static readonly ulong s_secret = CreateSecret();
+
+        private static long s_count;
+
+        // The secret and a counter, through the splitmix64 mixer, so that the keys differ between pools and can't be
+        // guessed from the time or the address of the pool
+        public static ulong Next()
+        {
+            var z = s_secret + (ulong)Interlocked.Increment(ref s_count) * 0x9E3779B97F4A7C15UL;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            return z ^ (z >> 31);
+        }
+
+        private static ulong CreateSecret()
+        {
+            var bytes = new byte[8];
+
+            using (var random = RandomNumberGenerator.Create())
+            {
+                random.GetBytes(bytes);
+            }
+
+            return BitConverter.ToUInt64(bytes, 0);
+        }
     }
 }

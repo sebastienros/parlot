@@ -19,7 +19,8 @@ namespace Parlot.Benchmarks;
 // | PooledStrings     | Repeated | 90.40 us | 9.746 us | 9.116 us |  1.80 | 0.3662 |   8.02 KB |        0.15 |
 
 // Measures ToPooledString() against ToString() on 1000 identifiers or string literals: "Repeated" uses 50 distinct
-// values, "Distinct" 1000 different ones, which switch the pool off. The 8 KB left are the result list.
+// values, "Distinct" 1000 different ones, which switch the pool off, and "Long" 50 distinct values of 27 chars, whose
+// chars between the first and the last 8 are hashed too. The 8 KB left are the result list.
 
 [MemoryDiagnoser, ShortRunJob]
 public class PooledStringBenchmarks
@@ -32,14 +33,15 @@ public class PooledStringBenchmarks
     private string _identifierInput = "";
     private string _stringInput = "";
 
-    [Params("Repeated", "Distinct")]
+    [Params("Repeated", "Distinct", "Long")]
     public string Scenario { get; set; } = "Repeated";
 
     [GlobalSetup]
     public void Setup()
     {
         var distinct = Scenario == "Distinct" ? 1000 : 50;
-        var names = Enumerable.Range(0, 1000).Select(i => "identifier" + (i * 7919 % distinct)).ToArray();
+        var prefix = Scenario == "Long" ? "a_longer_identifier_name_" : "identifier";
+        var names = Enumerable.Range(0, 1000).Select(i => prefix + (i * 7919 % distinct)).ToArray();
 
         _identifierInput = string.Join(" ", names);
         // Half of the strings have an escape sequence
