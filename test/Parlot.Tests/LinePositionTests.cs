@@ -450,38 +450,103 @@ public class LinePositionTests
         Assert.Equal(new[] { ("ab", 1, 4), ("cd", 2, 4), ("ef", 3, 3) }, items);
     }
 
-    [Fact]
-    public void PositionsRequestedForwardRecordNoLines()
+    private static int RecordedLines(Cursor cursor)
     {
-        var text = string.Join("\n", Enumerable.Range(0, 1_000).Select(static i => "id" + i));
-        var cursor = new Cursor(text);
+        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var lines = field.GetValue(cursor);
+        return lines is null ? -1 : (int)lines.GetType().GetField("Count")!.GetValue(lines)!;
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData(JavaScriptNewLines)]
+    public void PositionsRequestedForwardRecordTheLines(string newLines)
+    {
+        var text = string.Join("\r\n", Enumerable.Range(0, 1_000).Select(static i => "id" + i));
+        var expected = References(text, newLines);
+        var cursor = new Cursor(text) { NewLines = newLines };
 
         for (var offset = 0; offset <= text.Length; offset += 7)
         {
-            Assert.Equal(References(text, "\n")[offset], (cursor.GetPosition(offset).Line, cursor.GetPosition(offset).Column));
+            Assert.Equal(expected[offset], (cursor.GetPosition(offset).Line, cursor.GetPosition(offset).Column));
         }
 
-        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        var lines = field.GetValue(cursor)!;
-        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+        AssertPosition(cursor, text.Length, expected[text.Length].Line, expected[text.Length].Column);
 
-        // The requests behind the furthest one are counted, until they counted many times the text
+        // The lines are recorded as the furthest position moves: the requests behind it are found in them
+        Assert.Equal(999, RecordedLines(cursor));
         AssertPosition(cursor, 3, 1, 4);
-        AssertPosition(cursor, 10, 3, 3);
-        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+        AssertPosition(cursor, 10, 3, 1);
+        AssertPosition(cursor, 8, 2, 4);
+        Assert.Equal(expected[text.Length / 2], (cursor.GetPosition(text.Length / 2).Line, cursor.GetPosition(text.Length / 2).Column));
+        Assert.Equal(999, RecordedLines(cursor));
+    }
 
-        var middle = text.Length / 2;
-        var expected = References(text, "\n")[middle];
+    [Theory]
+    [InlineData("\n")]
+    [InlineData(JavaScriptNewLines)]
+    public void AFirstPositionFarFromTheOriginRecordsNoLines(string newLines)
+    {
+        var text = string.Join("\r\n", Enumerable.Range(0, 1_000).Select(static i => "id" + i));
+        var expected = References(text, newLines);
+        var cursor = new Cursor(text) { NewLines = newLines };
 
-        for (var i = 0; i < 40; i++)
+        // Like the position of an error, and the start of the text it reports
+        Assert.Equal(expected[text.Length], (cursor.GetPosition(text.Length).Line, cursor.GetPosition(text.Length).Column));
+        Assert.Equal(expected[text.Length], (cursor.GetPosition(text.Length).Line, cursor.GetPosition(text.Length).Column));
+        Assert.Equal(expected[text.Length - 2], (cursor.GetPosition(text.Length - 2).Line, cursor.GetPosition(text.Length - 2).Column));
+        Assert.Equal(0, RecordedLines(cursor));
+
+        // A position behind it on another line records them once
+        Assert.Equal(expected[10], (cursor.GetPosition(10).Line, cursor.GetPosition(10).Column));
+        Assert.Equal(999, RecordedLines(cursor));
+        Assert.Equal(expected[text.Length - 2], (cursor.GetPosition(text.Length - 2).Line, cursor.GetPosition(text.Length - 2).Column));
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData(JavaScriptNewLines)]
+    [InlineData("\r")]
+    public void PostOrderRequestsMatchTheReference(string newLines)
+    {
+        // The start and the end of each node of a random tree, after the ones of its children, as an AST builder requests them
+        var random = new Random(602);
+        var pieces = new[] { "\n", "\r", "\r\n", "\u2028", "a", "bc", "def ", "\t", "ghijklmnopq" };
+        var builder = new StringBuilder();
+
+        while (builder.Length < 20_000)
         {
-            Assert.Equal(expected, (cursor.GetPosition(middle).Line, cursor.GetPosition(middle).Column));
+            builder.Append(pieces[random.Next(pieces.Length)]);
         }
 
-        // Then the lines up to the furthest position are recorded
-        Assert.True((int)lines.GetType().GetField("Count")!.GetValue(lines)! > 900);
-        AssertPosition(cursor, 3, 1, 4);
-        AssertPosition(cursor, 10, 3, 3);
+        var text = builder.ToString();
+        var requests = new List<int>();
+
+        void Node(int start, int end, int depth)
+        {
+            var at = start;
+
+            while (depth < 12 && at < end)
+            {
+                var childEnd = Math.Min(end, at + random.Next(1, Math.Max(2, (end - start) / 2)));
+                Node(at, childEnd, depth + 1);
+                at = childEnd + random.Next(0, 3);
+            }
+
+            requests.Add(start);
+            requests.Add(end);
+        }
+
+        Node(0, text.Length, 0);
+
+        var expected = References(text, newLines);
+        var cursor = new Cursor(text) { NewLines = newLines };
+
+        foreach (var offset in requests)
+        {
+            var position = cursor.GetPosition(offset);
+            Assert.Equal((offset, expected[offset].Line, expected[offset].Column), (position.Offset, position.Line, position.Column));
+        }
     }
 
     [Fact]

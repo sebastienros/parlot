@@ -107,7 +107,7 @@ parsers report.
 The cursor only tracks its offset. The line and the column are computed when `Position` is read, by counting the line
 terminators between the furthest position read and this one (vectorized on .NET 8 and later), as
 Roslyn computes the lines of a `SourceText` only when they are asked for. A position behind the furthest one is counted
-from the lines the cursor recorded, see `Cursor.GetPosition(offset)`. Reading a position thus costs a scan of the text
+from the starts of the lines the cursor recorded as the furthest one moved, see `Cursor.GetPosition(offset)`. Reading a position thus costs a scan of the text
 moved over since the furthest read, which is why parsers save `Cursor.Offset` rather than `Cursor.Position` to move back.
 Read `Position` where it is reported: in an error, or in a callback which records it in a result.
 
