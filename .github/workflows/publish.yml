@@ -94,6 +94,11 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
 
+    # Pack before the tests: some of them build src/Parlot again into its bin folder, without the release version
+    # (NativeAotRuntimeTests replaced the net10.0 Parlot.dll of 2.4.0 and 2.5.0 with a 2.0.0.0 one).
+    - name: Pack with dotnet
+      run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
+
     - name: Test Parlot
       run: dotnet test test/Parlot.Tests/Parlot.Tests.csproj --configuration Release --no-build -f net10.0
 
@@ -102,9 +107,6 @@ jobs:
 
     - name: Test standalone parsers
       run: dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj --configuration Release --no-build
-
-    - name: Pack with dotnet
-      run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
 
     - name: Download Parlot.Explorer package
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
