@@ -1112,6 +1112,48 @@ public class CompactingStreamTests
         Assert.InRange(peak, 1, 16);
     }
 
+    [Fact]
+    public void PositionsRequestedForwardDontRetainTheLinesOfALargeWindow()
+    {
+        // A token of 10,000 lines, which a window holds at once, then small ones. Its end, then its last '\n', records its lines.
+        var parser = Literals.Pattern(static c => c != ';')
+            .Then(static (context, start, end, _) =>
+            {
+                var cursor = context.Scanner.Cursor;
+                var line = cursor.GetPosition(end).Line;
+                Assert.Equal(line - 1, cursor.GetPosition(end - 1).Line);
+                return line;
+            })
+            .AndSkip(Literals.Char(';'))
+            .And(ZeroOrMany(Terms.Identifier().Then(static (context, start, end, _) => context.Scanner.Cursor.GetPosition(end).Column)))
+            .Eof();
+
+        var text = string.Concat(Enumerable.Repeat("ab\n", 10_000)) + ";" + string.Join("\n", Enumerable.Range(0, 5_000).Select(static i => " id" + i));
+        Cursor? cursor = null;
+        var peak = 0;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 64,
+            ContextFactory = (scanner, token) =>
+            {
+                cursor = scanner.Cursor;
+                return new ParseContext(scanner, token) { OnEnterParser = (_, _) => peak = Math.Max(peak, RecordedLineStarts(cursor)) };
+            },
+        };
+
+        var result = parser.Parse(new ChunkedReader(text, 7), options);
+
+        var expected = parser.Parse(text);
+
+        Assert.Equal(10_001, result.Item1);
+        Assert.Equal(expected.Item2, result.Item2);
+
+        // The lines of the large window were recorded, then dropped with its text, and the next windows reuse a small array
+        Assert.True(peak >= 10_000, $"peak {peak}");
+        Assert.InRange(RecordedLineStarts(cursor), 1, 256);
+    }
+
     // The capacity of the line starts recorded by a cursor, read by reflection since the map is private
     private static int RecordedLineStarts(Cursor? cursor)
     {
