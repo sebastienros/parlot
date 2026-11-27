@@ -14,6 +14,9 @@ namespace Parlot.Benchmarks;
 // which counts the lines of the whole text once.
 // The Tree benchmarks parse nested lists of identifiers, one item per line, as a parser building an AST with locations
 // does: each node asks for the position of its end, then of its start, which is far behind it for the outer lists.
+// The cursor records the start of each line as the furthest position moves, such that a position behind it is on its
+// line, on the line of the previous one, or a binary search. RandomRequests asks for the offsets of the tree in a random
+// order.
 [MemoryDiagnoser]
 public class PositionBenchmarks
 {
@@ -30,6 +33,8 @@ public class PositionBenchmarks
 
     private static readonly string _tree = BuildTree("\n");
     private static readonly string _treeCrLf = BuildTree("\r\n");
+
+    private static readonly int[] _randomOffsets = BuildRandomOffsets();
 
     private static readonly Parser<long> _treeWithoutLocations = BuildTreeParser(locations: false);
     private static readonly Parser<long> _treeWithLocations = BuildTreeParser(locations: true);
@@ -65,6 +70,19 @@ public class PositionBenchmarks
 
         Append(6);
         return builder.ToString();
+    }
+
+    private static int[] BuildRandomOffsets()
+    {
+        var random = new Random(602);
+        var offsets = new int[8_192];
+
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            offsets[i] = random.Next(_tree.Length + 1);
+        }
+
+        return offsets;
     }
 
     // The sum of the lines and columns of the nodes, or of their offsets
@@ -111,6 +129,8 @@ public class PositionBenchmarks
         if (TreeWithoutLocations() == 0) throw new InvalidOperationException(nameof(TreeWithoutLocations));
         if (TreeWithLocations() == 0) throw new InvalidOperationException(nameof(TreeWithLocations));
         if (TreeWithLocationsCrLf() != TreeWithLocations()) throw new InvalidOperationException(nameof(TreeWithLocationsCrLf));
+        if (TreeWithLocationsJavaScript() != TreeWithLocations()) throw new InvalidOperationException(nameof(TreeWithLocationsJavaScript));
+        if (RandomRequests() == 0) throw new InvalidOperationException(nameof(RandomRequests));
 
         if (Identifiers() != 2000) throw new InvalidOperationException(nameof(Identifiers));
         if (PositionAfterEachIdentifier() != 400) throw new InvalidOperationException(nameof(PositionAfterEachIdentifier));
@@ -139,4 +159,23 @@ public class PositionBenchmarks
     // "\r\n" ends a single line with the line terminators of JavaScript
     [Benchmark]
     public long TreeWithLocationsCrLf() => _treeWithLocations.Parse(new ParseContext(new Scanner(_treeCrLf)) { NewLines = "\n\r\u2028\u2029" });
+
+    // The line terminators of JavaScript in a text without '\r'
+    [Benchmark]
+    public long TreeWithLocationsJavaScript() => _treeWithLocations.Parse(new ParseContext(new Scanner(_tree)) { NewLines = "\n\r\u2028\u2029" });
+
+    [Benchmark]
+    public long RandomRequests()
+    {
+        var cursor = new Cursor(_tree) { NewLines = "\n\r\u2028\u2029" };
+        var sum = 0L;
+
+        foreach (var offset in _randomOffsets)
+        {
+            var position = cursor.GetPosition(offset);
+            sum += position.Line + position.Column;
+        }
+
+        return sum;
+    }
 }
